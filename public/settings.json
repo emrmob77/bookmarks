@@ -1,0 +1,19 @@
+{
+  "title": "Bookmarkss",
+  "description": "Your personal bookmark manages",
+  "keywords": "bookmarks, bookmark managers",
+  "favicon": "/favicon.ico",
+  "logo": "/logo.png",
+  "socialLinks": {
+    "twitter": "",
+    "github": "",
+    "linkedin": ""
+  },
+  "emailSettings": {
+    "fromEmail": "",
+    "smtpHost": "",
+    "smtpPort": "",
+    "smtpUser": "",
+    "smtpPass": ""
+  }
+}
