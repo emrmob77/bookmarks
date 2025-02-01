@@ -63,15 +63,66 @@ export default function Dashboard() {
   const handleToggleFavorite = (bookmarkId: string) => {
     if (!user) return;
     
-    const updatedBookmarks = bookmarks.map(bookmark =>
+    // Tüm bookmarkları al
+    const allBookmarks = getBookmarks();
+    const targetBookmark = allBookmarks.find(b => b.id === bookmarkId);
+    
+    if (!targetBookmark) return;
+
+    // Kullanıcının favorilerini al
+    const userFavoritesKey = `userFavorites_${user.id}`;
+    let userFavorites = [];
+    try {
+      userFavorites = JSON.parse(localStorage.getItem(userFavoritesKey) || '[]');
+    } catch (error) {
+      console.error('Favori verisi parse edilemedi:', error);
+    }
+
+    const isFavorited = userFavorites.some((fav: any) => fav.bookmarkId === bookmarkId);
+    let newFavorites;
+    
+    if (isFavorited) {
+      newFavorites = userFavorites.filter((fav: any) => fav.bookmarkId !== bookmarkId);
+    } else {
+      const newFavorite = {
+        bookmarkId,
+        userId: user.id,
+        createdAt: new Date().toISOString(),
+        bookmarkData: targetBookmark
+      };
+      newFavorites = [...userFavorites, newFavorite];
+    }
+
+    // Local storage'ı güncelle
+    localStorage.setItem(userFavoritesKey, JSON.stringify(newFavorites));
+
+    // Tüm kullanıcıların favorilerini topla
+    const allFavorites: any[] = [];
+    Object.keys(localStorage).forEach(key => {
+      if (key.startsWith('userFavorites_')) {
+        try {
+          const storedFavs = JSON.parse(localStorage.getItem(key) || '[]');
+          allFavorites.push(...storedFavs);
+        } catch (error) {
+          console.error('Favori verisi parse edilemedi:', error);
+        }
+      }
+    });
+
+    // Toplam favori sayısını hesapla
+    const totalFavoriteCount = allFavorites.filter(fav => fav.bookmarkId === bookmarkId).length;
+
+    // Bookmark'ları güncelle
+    const updatedBookmarks = allBookmarks.map(bookmark =>
       bookmark.id === bookmarkId
         ? { 
             ...bookmark, 
-            isFavorite: !bookmark.isFavorite,
-            favoriteCount: !bookmark.isFavorite ? (bookmark.favoriteCount || 0) + 1 : Math.max(0, (bookmark.favoriteCount || 0) - 1)
+            isFavorite: !isFavorited,
+            favoriteCount: totalFavoriteCount
           }
         : bookmark
     );
+
     setBookmarks(updatedBookmarks);
     saveBookmarks(updatedBookmarks);
   };
@@ -110,8 +161,16 @@ export default function Dashboard() {
           }
         : bookmark
     );
-    setBookmarks(updatedBookmarks);
-    saveBookmarks(updatedBookmarks);
+    const typedBookmarks: Bookmark[] = updatedBookmarks.map(bookmark => ({
+      ...bookmark,
+      comments: bookmark.comments?.map(comment => ({
+        ...comment,
+        bookmarkId: bookmark.id,
+        userId: user?.id || ''
+      })) || []
+    }));
+    setBookmarks(typedBookmarks);
+    saveBookmarks(typedBookmarks);
   };
 
   const filteredBookmarks = bookmarks.filter(bookmark => {

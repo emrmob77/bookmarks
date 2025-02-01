@@ -168,9 +168,11 @@ export default function BookmarkList({ bookmarks, onRemove, onToggleFavorite, on
                       {bookmark.username}
                     </Link>
                   </span>
-                  <time dateTime={bookmark.createdAt}>
-                    {format(new Date(bookmark.createdAt), 'MMM d, yyyy')}
-                  </time>
+                  <Link href={`/bookmark/${bookmark.id}`}>
+                    <time dateTime={bookmark.createdAt}>
+                      {format(new Date(bookmark.createdAt), 'MMM d, yyyy')}
+                    </time>
+                  </Link>
                 </div>
               </div>
 

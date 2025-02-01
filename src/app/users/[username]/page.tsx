@@ -28,6 +28,7 @@ export default function UserProfile() {
   const username = decodeURIComponent(params.username as string);
   const [activeTab, setActiveTab] = useState<TabType>('bookmarks');
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
+  const [favoriteBookmarks, setFavoriteBookmarks] = useState<Bookmark[]>([]);
   const [bookmarksWithComments, setBookmarksWithComments] = useState<Bookmark[]>([]);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [userStats, setUserStats] = useState({
@@ -42,19 +43,123 @@ export default function UserProfile() {
   // Kullanıcının kendi profilinde olup olmadığını kontrol et
   const isOwnProfile = user && user.username === username;
 
-  useEffect(() => {
-    // Kullanıcı bilgilerini al
-    const userData = localStorage.getItem('user');
-    const allUsers = userData ? [JSON.parse(userData)] : [];
-    const profile = allUsers.find(user => user.username === username);
+  const getUserFavorites = () => {
+    try {
+      // Profil sayfasındaki kullanıcının ID'sini bul
+      const usersData = localStorage.getItem('users');
+      const allUsers = usersData ? JSON.parse(usersData) : [];
+      const profileUser = allUsers.find((u: any) => u.username === username);
+      
+      if (!profileUser) return [];
+
+      // Kullanıcının favorilerini al
+      const userFavoritesKey = `userFavorites_${profileUser.id}`;
+      const storedFavorites = localStorage.getItem(userFavoritesKey);
+      if (!storedFavorites) return [];
+
+      const userFavorites = JSON.parse(storedFavorites);
+
+      // Tüm bookmarkları al
+      const allBookmarks = getBookmarks();
+
+      // Tüm kullanıcıların favorilerini topla
+      const allFavorites: any[] = [];
+      Object.keys(localStorage).forEach(key => {
+        if (key.startsWith('userFavorites_')) {
+          try {
+            const storedFavs = JSON.parse(localStorage.getItem(key) || '[]');
+            allFavorites.push(...storedFavs);
+          } catch (error) {
+            console.error('Favori verisi parse edilemedi:', error);
+          }
+        }
+      });
+
+      // Favori bookmarkları işaretle ve döndür
+      const favoriteBookmarks = userFavorites.map((fav: any) => {
+        const bookmark = allBookmarks.find(b => b.id === fav.bookmarkId);
+        if (!bookmark) return null;
+
+        return {
+          ...bookmark,
+          isFavorite: true,
+          favoriteCount: allFavorites.filter(f => f.bookmarkId === bookmark.id).length
+        };
+      }).filter(Boolean);
+
+      return favoriteBookmarks;
+    } catch (error) {
+      console.error('Favori verisi yüklenirken hata:', error);
+      return [];
+    }
+  };
+
+  const updateUserRecord = () => {
+    let allUsers: any[] = [];
+    try {
+      const usersData = localStorage.getItem('users');
+      if (usersData) {
+        allUsers = JSON.parse(usersData);
+      }
+    } catch (error) {
+      console.error('Kullanıcılar yüklenirken hata:', error);
+    }
+    const userIndex = allUsers.findIndex(u => u.username === user?.username);
+    if (userIndex !== -1) {
+      // Mevcut kullanıcıyı güncelle
+      allUsers[userIndex] = { ...allUsers[userIndex], ...user };
+    } else if (user) {
+      // Yeni kullanıcı kaydı ekle
+      allUsers.push(user);
+    }
+    localStorage.setItem('users', JSON.stringify(allUsers));
+  };
+
+  const loadData = () => {
+    updateUserRecord();
+
+    // Tüm kullanıcıları al
+    let allUsers: any[] = [];
+    try {
+      const usersData = localStorage.getItem('users');
+      if (usersData) {
+        allUsers = JSON.parse(usersData);
+      }
+    } catch (error) {
+      console.error('Kullanıcılar yüklenirken hata:', error);
+    }
+
+    // Profil sayfasındaki kullanıcıyı bul
+    const profile = allUsers.find(u => u.username === username);
     setUserProfile(profile || null);
 
     // Tüm yer imlerini al
     const allBookmarks = getBookmarks();
     
     // Kullanıcının kendi yer imleri
-    const userBookmarks = allBookmarks.filter(b => b.username === username && b.isPublic);
-    setBookmarks(userBookmarks);
+    const userBookmarks = allBookmarks.filter(b => b.username === username && (b.isPublic || isOwnProfile));
+
+    // Tüm kullanıcıların favorilerini topla
+    const allFavorites: any[] = [];
+    Object.keys(localStorage).forEach(key => {
+      if (key.startsWith('userFavorites_')) {
+        try {
+          const storedFavs = JSON.parse(localStorage.getItem(key) || '[]');
+          allFavorites.push(...storedFavs);
+        } catch (error) {
+          console.error('Favori verisi parse edilemedi:', error);
+        }
+      }
+    });
+
+    // Bookmark'ları favori durumları ile işaretle
+    const markedBookmarks = userBookmarks.map(bookmark => ({
+      ...bookmark,
+      isFavorite: user ? allFavorites.some(fav => fav.bookmarkId === bookmark.id && fav.userId === user.id) : false,
+      favoriteCount: allFavorites.filter(fav => fav.bookmarkId === bookmark.id).length
+    }));
+
+    setBookmarks(markedBookmarks);
 
     // Kullanıcının yorum yaptığı yer imleri
     const bookmarksWithUserComments = allBookmarks.filter(bookmark => 
@@ -63,17 +168,37 @@ export default function UserProfile() {
     setBookmarksWithComments(bookmarksWithUserComments);
 
     // İstatistikleri güncelle
+    const profileUserId = profile?.id;
+    const userFavoriteBookmarks = profileUserId ? 
+      allFavorites.filter(fav => fav.userId === profileUserId) : [];
+
     setUserStats({
       totalBookmarks: userBookmarks.length,
       publicBookmarks: userBookmarks.filter(b => b.isPublic).length,
       privateBookmarks: userBookmarks.filter(b => !b.isPublic).length,
-      favorites: userBookmarks.filter(b => b.isFavorite).length,
-      joinedAt: userProfile?.createdAt ? new Date(userProfile.createdAt).toLocaleDateString('tr-TR') : '-',
+      favorites: userFavoriteBookmarks.length,
+      joinedAt: profile?.createdAt ? new Date(profile.createdAt).toLocaleDateString('tr-TR') : '-',
       totalComments: bookmarksWithUserComments.reduce((total, bookmark) => 
         total + (bookmark.comments?.filter(comment => comment.username === username).length || 0), 0
       )
     });
-  }, [username, userProfile?.createdAt]);
+
+    // After obtaining the profile from local storage
+    if (profile) {
+      // Update profile with social media fields from authUser if missing
+      profile.website = profile.website || user?.website;
+      profile.twitter = profile.twitter || user?.twitter;
+      profile.github = profile.github || user?.github;
+      profile.bio = profile.bio || user?.bio;
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+    // Favorileri güncelle
+    const favorites = getUserFavorites();
+    setFavoriteBookmarks(favorites);
+  }, [username, user, isOwnProfile]);
 
   const handleRemoveBookmark = (id: string) => {
     const updatedBookmarks = bookmarks.filter(b => b.id !== id);
@@ -81,12 +206,79 @@ export default function UserProfile() {
     saveBookmarks(updatedBookmarks);
   };
 
-  const handleToggleFavorite = (id: string) => {
-    const updatedBookmarks = bookmarks.map(bookmark =>
-      bookmark.id === id ? { ...bookmark, isFavorite: !bookmark.isFavorite } : bookmark
+  const handleToggleFavorite = async (id: string) => {
+    if (!user) return;
+    
+    // Tüm bookmarkları al
+    const allBookmarks = getBookmarks();
+    const targetBookmark = allBookmarks.find(b => b.id === id);
+    
+    if (!targetBookmark) return;
+
+    // Kullanıcının favorilerini al
+    const userFavoritesKey = `userFavorites_${user.id}`;
+    let userFavorites = [];
+    try {
+      userFavorites = JSON.parse(localStorage.getItem(userFavoritesKey) || '[]');
+    } catch (error) {
+      console.error('Favori verisi parse edilemedi:', error);
+    }
+
+    const isFavorited = userFavorites.some((fav: any) => fav.bookmarkId === id);
+    let newFavorites;
+    
+    if (isFavorited) {
+      newFavorites = userFavorites.filter((fav: any) => fav.bookmarkId !== id);
+    } else {
+      const newFavorite = {
+        bookmarkId: id,
+        userId: user.id,
+        createdAt: new Date().toISOString()
+      };
+      newFavorites = [...userFavorites, newFavorite];
+    }
+
+    // Local storage'ı güncelle
+    localStorage.setItem(userFavoritesKey, JSON.stringify(newFavorites));
+
+    // Tüm kullanıcıların favorilerini topla
+    const allFavorites: any[] = [];
+    Object.keys(localStorage).forEach(key => {
+      if (key.startsWith('userFavorites_')) {
+        try {
+          const storedFavs = JSON.parse(localStorage.getItem(key) || '[]');
+          allFavorites.push(...storedFavs);
+        } catch (error) {
+          console.error('Favori verisi parse edilemedi:', error);
+        }
+      }
+    });
+
+    // Toplam favori sayısını hesapla
+    const totalFavoriteCount = allFavorites.filter(fav => fav.bookmarkId === id).length;
+
+    // Bookmark'ları güncelle
+    const updatedBookmarks = allBookmarks.map(bookmark =>
+      bookmark.id === id
+        ? { 
+            ...bookmark, 
+            isFavorite: !isFavorited,
+            favoriteCount: totalFavoriteCount
+          }
+        : bookmark
     );
-    setBookmarks(updatedBookmarks);
+
     saveBookmarks(updatedBookmarks);
+    
+    // Sayfadaki verileri güncelle
+    loadData();
+
+    // Favorileri güncelle
+    const updatedFavorites = getUserFavorites();
+    setFavoriteBookmarks(updatedFavorites);
+
+    // Bookmark state'ini güncelle
+    setBookmarks(updatedBookmarks);
   };
 
   const handleTogglePinned = (id: string) => {
@@ -121,8 +313,6 @@ export default function UserProfile() {
     setBookmarks(updatedBookmarks);
     saveBookmarks(updatedBookmarks);
   };
-
-  const favoriteBookmarks = bookmarks.filter(b => b.isFavorite);
 
   const renderTabContent = () => {
     const sortBookmarks = (bookmarksToSort: Bookmark[]) => {
