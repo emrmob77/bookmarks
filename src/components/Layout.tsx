@@ -3,17 +3,115 @@
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { useState, useRef, useEffect } from 'react';
+import Script from 'next/script';
 
 interface LayoutProps {
   children: React.ReactNode;
   hideHeader?: boolean;
 }
 
+interface SiteSettings {
+  title: string;
+  description: string;
+  keywords: string;
+  favicon: string;
+  logo: string;
+  googleAnalytics?: {
+    measurementId: string;
+    trackingCode: string;
+  };
+  searchConsole?: {
+    verificationCode: string;
+  };
+  socialLinks: {
+    twitter: string;
+    github: string;
+    linkedin: string;
+  };
+  emailSettings: {
+    fromEmail: string;
+    smtpHost: string;
+    smtpPort: string;
+    smtpUser: string;
+    smtpPass: string;
+  };
+}
+
+const defaultSettings: SiteSettings = {
+  title: 'Bookmarks',
+  description: 'Your personal bookmark manager',
+  keywords: 'bookmarks, bookmark manager, links',
+  favicon: '/favicon.ico',
+  logo: '/logo.png',
+  socialLinks: {
+    twitter: '',
+    github: '',
+    linkedin: ''
+  },
+  emailSettings: {
+    fromEmail: '',
+    smtpHost: '',
+    smtpPort: '',
+    smtpUser: '',
+    smtpPass: ''
+  }
+};
+
 export default function Layout({ children, hideHeader = false }: LayoutProps) {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const [settings, setSettings] = useState<SiteSettings>(defaultSettings);
+
+  useEffect(() => {
+    // Site ayarlarını localStorage'dan yükle
+    try {
+      const storedSettings = localStorage.getItem('siteSettings');
+      if (storedSettings) {
+        setSettings({
+          ...defaultSettings,
+          ...JSON.parse(storedSettings)
+        });
+      }
+    } catch (error) {
+      console.error('Error loading settings:', error);
+    }
+  }, []);
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Google Analytics */}
+      {settings?.googleAnalytics?.measurementId && (
+        <>
+          <Script
+            src={`https://www.googletagmanager.com/gtag/js?id=${settings.googleAnalytics.measurementId}`}
+            strategy="afterInteractive"
+          />
+          <Script id="google-analytics" strategy="afterInteractive">
+            {`
+              window.dataLayer = window.dataLayer || [];
+              function gtag(){dataLayer.push(arguments);}
+              gtag('js', new Date());
+              gtag('config', '${settings.googleAnalytics.measurementId}');
+            `}
+          </Script>
+          {settings.googleAnalytics.trackingCode && (
+            <Script
+              id="google-analytics-custom"
+              dangerouslySetInnerHTML={{ __html: settings.googleAnalytics.trackingCode }}
+              strategy="afterInteractive"
+            />
+          )}
+        </>
+      )}
+
+      {/* Google Search Console Verification */}
+      {settings?.searchConsole?.verificationCode && (
+        <Script
+          id="google-search-console"
+          dangerouslySetInnerHTML={{ __html: settings.searchConsole.verificationCode }}
+          strategy="beforeInteractive"
+        />
+      )}
+
       {/* Header */}
       <header className="bg-white border-b">
         <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8 flex items-center justify-between">
@@ -78,10 +176,7 @@ export default function Layout({ children, hideHeader = false }: LayoutProps) {
                 </Link>
                 <div className="border-t border-gray-100 my-1"></div>
                 <button
-                  onClick={() => {
-                    localStorage.removeItem('user');
-                    window.location.href = '/';
-                  }}
+                  onClick={logout}
                   className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                 >
                   <div className="flex items-center">
@@ -112,7 +207,45 @@ export default function Layout({ children, hideHeader = false }: LayoutProps) {
         </div>
       </header>
 
-      {children}
+      {/* Footer */}
+      <footer className="bg-white border-t border-gray-200 fixed bottom-0 w-full">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            {/* Logo ve Copyright */}
+            <div className="flex items-center space-x-2 text-sm text-gray-600">
+              <Link href="/" className="font-semibold text-gray-900 hover:text-blue-600">
+                Bookmarks
+              </Link>
+              <span>•</span>
+              <span>&copy; {new Date().getFullYear()}</span>
+            </div>
+
+            {/* Links */}
+            <nav className="flex items-center space-x-4 text-sm">
+              <Link href="/about" className="text-gray-600 hover:text-gray-900">
+                About Us
+              </Link>
+              <Link href="/contact" className="text-gray-600 hover:text-gray-900">
+                Contact
+              </Link>
+              <Link href="/faq" className="text-gray-600 hover:text-gray-900">
+                FAQ
+              </Link>
+              <Link href="/privacy" className="text-gray-600 hover:text-gray-900">
+                Privacy
+              </Link>
+              <Link href="/terms" className="text-gray-600 hover:text-gray-900">
+                Terms of Service
+              </Link>
+            </nav>
+          </div>
+        </div>
+      </footer>
+
+      {/* Add padding to main content to prevent footer overlap */}
+      <div className="pb-16">
+        {children}
+      </div>
     </div>
   );
 } 

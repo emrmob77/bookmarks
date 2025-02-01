@@ -5,6 +5,7 @@ import './globals.css';
 import { AuthProvider } from '@/contexts/AuthContext';
 import fs from 'fs';
 import path from 'path';
+import ClientLayout from './ClientLayout';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -26,7 +27,7 @@ export async function generateMetadata(): Promise<Metadata> {
       metadataBase: new URL('http://localhost:3000'),
       title: {
         default: settings.title,
-        template: '%s | Bookmarks'
+        template: '%s'
       },
       description: settings.description,
       keywords: settings.keywords,
@@ -45,7 +46,7 @@ export async function generateMetadata(): Promise<Metadata> {
       metadataBase: new URL('http://localhost:3000'),
       title: {
         default: 'Bookmarks',
-        template: '%s | Bookmarks'
+        template: '%s'
       },
       description: 'Your personal bookmark manager'
     };
@@ -64,7 +65,9 @@ export default function RootLayout({
     <html lang="en">
       <body className={inter.className}>
         <AuthProvider>
-          {children}
+          <ClientLayout>
+            {children}
+          </ClientLayout>
         </AuthProvider>
       </body>
     </html>

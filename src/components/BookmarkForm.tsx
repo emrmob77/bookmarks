@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Bookmark, NewBookmark } from '@/types';
+import { getUsers } from '@/lib/storage';
+import { getBookmarks } from '@/lib/storage';
 
 interface MetadataResponse {
   title?: string;
@@ -27,17 +29,16 @@ export default function BookmarkForm({ onAdd, editingBookmark, onUpdate, onCance
   const [tags, setTags] = useState('');
   const [isPublic, setIsPublic] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
   // Initialize form with editing bookmark data
   useEffect(() => {
     if (editingBookmark) {
-      setUrl(editingBookmark.url);
-      setTitle(editingBookmark.title);
-      setDescription(editingBookmark.description);
-      setImage(editingBookmark.image);
-      setTags(editingBookmark.tags.join(', '));
-      setIsPublic(editingBookmark.isPublic);
+      setUrl(editingBookmark.url || '');
+      setTitle(editingBookmark.title || '');
+      setDescription(editingBookmark.description || '');
+      setTags(editingBookmark.tags?.join(', ') || '');
+      setIsPublic(editingBookmark.isPublic || true);
     }
   }, [editingBookmark]);
 
@@ -59,25 +60,60 @@ export default function BookmarkForm({ onAdd, editingBookmark, onUpdate, onCance
     setError('');
 
     try {
-      // URL'yi kontrol et ve gerekirse https:// ekle
+      // URL formatını kontrol et
       let validUrl = url;
-      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      if (!url.match(/^https?:\/\//i)) {
         validUrl = `https://${url}`;
       }
 
-      const response = await fetch(`/api/metadata?url=${encodeURIComponent(validUrl)}`);
-      const data: MetadataResponse = await response.json();
-
-      if (!response.ok || data.error) {
-        throw new Error(data.error || 'Failed to fetch metadata');
+      // URL'nin geçerli olup olmadığını kontrol et
+      try {
+        new URL(validUrl);
+      } catch (e) {
+        setError('Invalid URL format');
+        return;
       }
 
-      setTitle(data.title || '');
-      setDescription(data.description || '');
-      setImage(data.image || '');
+      try {
+        const response = await fetch(`/api/metadata?url=${encodeURIComponent(validUrl)}`, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+          },
+          signal: AbortSignal.timeout(10000) // 10 saniye timeout
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          if (data.error) {
+            setError(data.error);
+          } else {
+            setError('Failed to fetch URL data');
+          }
+          return;
+        }
+
+        if (!data.title && !data.description) {
+          setError('No metadata found');
+          return;
+        }
+
+        setTitle(data.title || '');
+        setDescription(data.description || '');
+        setImage(data.image || '');
+      } catch (error) {
+        if (error.name === 'AbortError') {
+          setError('Request timeout - please try again');
+        } else if (!navigator.onLine) {
+          setError('No internet connection');
+        } else {
+          setError('Failed to fetch URL data');
+        }
+      }
     } catch (err) {
-      console.error('Error fetching metadata:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch metadata');
+      console.error('Error:', err);
+      setError('An error occurred');
     } finally {
       setIsLoading(false);
     }
@@ -85,44 +121,65 @@ export default function BookmarkForm({ onAdd, editingBookmark, onUpdate, onCance
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (!url) return;
-
-    if (!user) {
-      setError('Please sign in first');
-      return;
-    }
+    if (!user) return;
 
     try {
-      // URL'yi kontrol et ve gerekirse https:// ekle
-      let validUrl = url;
-      if (!url.startsWith('http://') && !url.startsWith('https://')) {
-        validUrl = `https://${url}`;
+      setIsLoading(true);
+      setError(null);
+
+      // Kullanıcı ayarlarını kontrol et
+      const users = getUsers();
+      const currentUser = users.find((u: any) => u.username === user.username);
+      
+      if (!currentUser?.settings?.isApproved) {
+        setError('Your account is not approved yet. Please wait for admin approval.');
+        return;
       }
 
-      const bookmarkData: NewBookmark = {
-        url: validUrl,
-        title: title || validUrl,
+      // Eğer düzenleme modu değilse (yeni ekleme ise) limit kontrolü yap
+      if (!editingBookmark) {
+        const userBookmarks = getBookmarks().filter((b: { username: string }) => b.username === user.username);
+        if (userBookmarks.length >= (currentUser?.settings?.maxBookmarks || 10)) {
+          if (currentUser?.settings?.isPremium) {
+            setError('You have reached your premium account bookmark limit. Please contact admin to increase your limit.');
+          } else {
+            setError('You have reached your free account bookmark limit. Upgrade to premium to add more bookmarks.');
+          }
+          return;
+        }
+      }
+
+      const bookmarkData = {
+        title,
+        url,
         description,
         image,
-        tags: tags.split(',').map(tag => tag.trim()).filter(Boolean),
+        tags: tags.split(',').map(tag => tag.trim()).filter(tag => tag !== ''),
         isPublic,
-        userId: user.email,
-        favoriteCount: 0
+        isPinned: false,
+        isFavorite: false,
+        favoriteCount: 0,
+        comments: []
       };
 
       if (editingBookmark && onUpdate) {
-        onUpdate({
-          ...editingBookmark,
+        onUpdate({ ...editingBookmark, ...bookmarkData });
+      } else if (onAdd) {
+        onAdd({
           ...bookmarkData,
-        });
-      } else {
-        onAdd(bookmarkData);
-        resetForm();
+          id: Date.now().toString(),
+          userId: user.id,
+          username: user.username,
+          createdAt: new Date().toISOString()
+        } as NewBookmark);
       }
-    } catch (err) {
-      console.error('Error saving bookmark:', err);
-      setError(err instanceof Error ? err.message : 'Failed to save bookmark');
+
+      resetForm();
+    } catch (error) {
+      console.error('Error adding bookmark:', error);
+      setError('An error occurred while adding the bookmark');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -149,7 +206,8 @@ export default function BookmarkForm({ onAdd, editingBookmark, onUpdate, onCance
             placeholder="e.g., https://example.com"
             className="flex-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-blue-500 focus:ring-blue-500"
             required
-            title="Please enter a valid URL"
+            pattern="^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$"
+            title="Please enter a valid URL (e.g., https://example.com)"
           />
           {!editingBookmark && (
             <button
@@ -157,6 +215,7 @@ export default function BookmarkForm({ onAdd, editingBookmark, onUpdate, onCance
               onClick={fetchMetadata}
               className={`ml-2 inline-flex items-center p-1.5 border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50 ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
               disabled={isLoading}
+              title="Auto-fetch URL metadata"
             >
               {isLoading ? (
                 <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24">
@@ -172,7 +231,21 @@ export default function BookmarkForm({ onAdd, editingBookmark, onUpdate, onCance
           )}
         </div>
         {isLoading && (
-          <p className="mt-1 text-sm text-gray-500">Fetching metadata...</p>
+          <p className="mt-1 text-sm text-gray-500">Fetching URL metadata...</p>
+        )}
+        {error && (
+          <div className="mt-2 bg-red-50 border border-red-200 rounded-md p-3">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-red-700">{error}</p>
+              </div>
+            </div>
+          </div>
         )}
       </div>
 
@@ -235,27 +308,37 @@ export default function BookmarkForm({ onAdd, editingBookmark, onUpdate, onCance
       </div>
 
       {error && (
-        <div className="text-sm text-red-600">{error}</div>
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative">
+          <span className="block sm:inline">{error}</span>
+        </div>
       )}
 
-      <div className="flex justify-end space-x-3">
-        {editingBookmark && onCancel && (
+      <div className="flex justify-end space-x-2">
+        {editingBookmark && (
           <button
             type="button"
-            onClick={() => {
-              resetForm();
-              onCancel();
-            }}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            onClick={onCancel}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
           >
             Cancel
           </button>
         )}
         <button
           type="submit"
-          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          disabled={isLoading}
+          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
         >
-          {editingBookmark ? 'Update' : 'Add'} Bookmark
+          {isLoading ? (
+            <span className="flex items-center">
+              <svg className="w-4 h-4 mr-2 animate-spin" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+              Processing...
+            </span>
+          ) : (
+            editingBookmark ? 'Update' : 'Add'
+          )}
         </button>
       </div>
     </form>

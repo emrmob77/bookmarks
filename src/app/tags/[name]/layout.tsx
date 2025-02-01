@@ -16,8 +16,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const name = params?.name;
   if (!name) {
     return {
-      title: 'Tüm Etiketler - Bookmarks',
-      description: 'Tüm etiketlerin listesi ve popüler etiketler.',
+      title: 'All Tags - Bookmarks',
+      description: 'List of all tags and popular tags.',
     };
   }
 
@@ -33,14 +33,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
       if (tag?.metaTitle && tag?.metaDescription) {
         return {
-          title: tag.metaTitle,
+          title: `${tag.metaTitle} - Bookmarks`,
           description: tag.metaDescription,
           openGraph: {
-            title: tag.metaTitle,
+            title: `${tag.metaTitle} - Bookmarks`,
             description: tag.metaDescription,
           },
           twitter: {
-            title: tag.metaTitle,
+            title: `${tag.metaTitle} - Bookmarks`,
             description: tag.metaDescription,
           }
         };
@@ -50,10 +50,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     console.error('Error in generateMetadata:', error);
   }
 
-  // Varsayılan metadata
+  // Default metadata
   return {
     title: `${decodedName} - Bookmarks`,
-    description: `${decodedName} ile ilgili yer imleri ve kaynaklar.`,
+    description: `Bookmarks and resources related to ${decodedName}.`,
   };
 }
 

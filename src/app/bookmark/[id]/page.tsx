@@ -192,7 +192,7 @@ export default function BookmarkDetail() {
 
   return (
     <Layout>
-      <div className="max-w-7xl mx-auto px-4 py-12 sm:px-6 lg:px-8">
+      <div className="max-w-6xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Main Content */}
           <div className="lg:col-span-3">
@@ -200,7 +200,7 @@ export default function BookmarkDetail() {
               {/* Bookmark Title and Details */}
               <div className="border-b border-gray-200 pb-6">
                 <div className="flex items-center justify-between">
-                  <h1 className="text-2xl font-bold text-gray-900">{bookmark.title}</h1>
+                  <h1 className="text-xl font-semibold text-gray-900">{bookmark.title}</h1>
                   <button
                     onClick={handleToggleFavorite}
                     className={`p-2 rounded-full hover:bg-gray-100 ${
@@ -214,24 +214,24 @@ export default function BookmarkDetail() {
                 </div>
                 
                 <div className="mt-4 space-y-2">
-                  <p className="text-gray-600">
+                  <p className="text-base text-gray-600">
                     <a href={bookmark.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800 hover:underline">
                       {bookmark.url}
                     </a>
                   </p>
                   {bookmark.description && (
-                    <p className="text-gray-700">{bookmark.description}</p>
+                    <p className="text-base text-gray-700">{bookmark.description}</p>
                   )}
                   <div className="flex items-center space-x-4 text-sm text-gray-500">
                     <Link href={`/users/${encodeURIComponent(bookmark.username)}`} className="hover:text-blue-600">
                       {bookmark.username}
                     </Link>
                     <span>•</span>
-                    <span>{format(new Date(bookmark.createdAt), 'MMMM d, yyyy')}</span>
+                    <span>{format(new Date(bookmark.createdAt), 'MMM d, yyyy')}</span>
                     <span>•</span>
                     <span>{bookmark.favoriteCount || 0} favorites</span>
                   </div>
-                  <div className="flex flex-wrap gap-2 mt-4">
+                  <div className="flex flex-wrap gap-2 mt-3">
                     {bookmark.tags.map(tag => (
                       <Link
                         key={tag}
@@ -247,7 +247,7 @@ export default function BookmarkDetail() {
 
               {/* Comments Section */}
               <div className="mt-8">
-                <h2 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+                <h2 className="text-base font-medium text-gray-900 mb-4 flex items-center">
                   <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
                   </svg>
@@ -260,7 +260,7 @@ export default function BookmarkDetail() {
                     <div className="flex items-start space-x-3">
                       <div className="flex-shrink-0">
                         <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                          <span className="text-lg font-medium text-blue-600">
+                          <span className="text-base font-medium text-blue-600">
                             {user.username.charAt(0).toUpperCase()}
                           </span>
                         </div>
@@ -269,15 +269,15 @@ export default function BookmarkDetail() {
                         <textarea
                           value={commentText}
                           onChange={(e) => setCommentText(e.target.value)}
-                          placeholder="Share your thoughts..."
-                          className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                          placeholder="Write a comment..."
+                          className="w-full px-4 py-2 text-base border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                           rows={3}
                         />
                         <div className="mt-3 flex justify-end">
                           <button
                             onClick={handleAddComment}
                             disabled={!commentText.trim()}
-                            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
+                            className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
                           >
                             Add Comment
                           </button>
@@ -288,29 +288,29 @@ export default function BookmarkDetail() {
                 )}
 
                 {/* Comments List */}
-                <div className="space-y-6">
+                <div className="space-y-4">
                   {bookmark.comments && bookmark.comments.length > 0 ? (
                     bookmark.comments.map(comment => (
                       <div key={comment.id} className="flex items-start space-x-3">
                         <div className="flex-shrink-0">
-                          <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                            <span className="text-lg font-medium text-blue-600">
+                          <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center">
+                            <span className="text-sm font-medium text-blue-600">
                               {comment.username.charAt(0).toUpperCase()}
                             </span>
                           </div>
                         </div>
                         <div className="flex-1">
-                          <div className="bg-gray-50 rounded-lg px-6 py-4 hover:bg-gray-100 transition-colors duration-200">
+                          <div className="bg-gray-50 rounded-lg px-4 py-3 hover:bg-gray-100 transition-colors duration-200">
                             <div className="flex items-center justify-between mb-2">
                               <Link 
                                 href={`/users/${encodeURIComponent(comment.username)}`} 
-                                className="font-medium text-gray-900 hover:text-blue-600 transition-colors duration-200"
+                                className="text-sm font-medium text-gray-900 hover:text-blue-600 transition-colors duration-200"
                               >
                                 {comment.username}
                               </Link>
                               <div className="flex items-center space-x-2">
                                 <span className="text-sm text-gray-500">
-                                  {format(new Date(comment.createdAt), 'MMMM d, yyyy, HH:mm')}
+                                  {format(new Date(comment.createdAt), 'MMM d, HH:mm')}
                                 </span>
                                 {user && user.username === comment.username && (
                                   <div className="flex items-center space-x-2">
@@ -341,35 +341,35 @@ export default function BookmarkDetail() {
                                 <textarea
                                   value={editingCommentText}
                                   onChange={(e) => setEditingCommentText(e.target.value)}
-                                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                                   rows={3}
                                 />
-                                <div className="mt-2 flex justify-end space-x-2">
+                                <div className="mt-3 flex justify-end space-x-2">
                                   <button
                                     onClick={handleCancelEdit}
-                                    className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 transition-colors duration-200"
+                                    className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 transition-colors duration-200"
                                   >
                                     Cancel
                                   </button>
                                   <button
                                     onClick={handleUpdateComment}
                                     disabled={!editingCommentText.trim()}
-                                    className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
+                                    className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
                                   >
                                     Save
                                   </button>
                                 </div>
                               </div>
                             ) : (
-                              <p className="text-gray-700 leading-relaxed">{comment.text}</p>
+                              <p className="text-sm text-gray-700 leading-relaxed">{comment.text}</p>
                             )}
                           </div>
                         </div>
                       </div>
                     ))
                   ) : (
-                    <div className="text-center py-12 bg-gray-50 rounded-lg">
-                      <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="text-center py-10 bg-gray-50 rounded-lg">
+                      <svg className="mx-auto h-10 w-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                       </svg>
                       <h3 className="mt-2 text-sm font-medium text-gray-900">No comments yet</h3>
@@ -388,7 +388,7 @@ export default function BookmarkDetail() {
               <div className="flex items-center space-x-3">
                 <div className="flex-shrink-0">
                   <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
-                    <span className="text-xl font-medium text-blue-600">
+                    <span className="text-base font-medium text-blue-600">
                       {bookmark.username.charAt(0).toUpperCase()}
                     </span>
                   </div>
@@ -396,12 +396,12 @@ export default function BookmarkDetail() {
                 <div className="flex-1 min-w-0">
                   <Link 
                     href={`/users/${encodeURIComponent(bookmark.username)}`}
-                    className="text-lg font-medium text-gray-900 hover:text-blue-600 truncate block"
+                    className="text-base font-medium text-gray-900 hover:text-blue-600 truncate block"
                   >
                     {bookmark.username}
                   </Link>
                   <p className="text-sm text-gray-500">
-                    {format(new Date(bookmark.createdAt), "'Joined:' MMMM d, yyyy")}
+                    {format(new Date(bookmark.createdAt), "'Joined:' MMM d, yyyy")}
                   </p>
                 </div>
               </div>
@@ -409,26 +409,26 @@ export default function BookmarkDetail() {
 
             {/* Statistics */}
             <div className="bg-white rounded-lg shadow-sm p-6">
-              <h2 className="text-lg font-medium text-gray-900 mb-4">Statistics</h2>
+              <h2 className="text-base font-medium text-gray-900 mb-4">Statistics</h2>
               <div className="space-y-3">
                 <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Favorites</span>
-                  <span className="text-gray-900 font-medium">{bookmark.favoriteCount || 0}</span>
+                  <span className="text-sm text-gray-600">Favorites</span>
+                  <span className="text-sm text-gray-900 font-medium">{bookmark.favoriteCount || 0}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Comments</span>
-                  <span className="text-gray-900 font-medium">{bookmark.comments?.length || 0}</span>
+                  <span className="text-sm text-gray-600">Comments</span>
+                  <span className="text-sm text-gray-900 font-medium">{bookmark.comments?.length || 0}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Tags</span>
-                  <span className="text-gray-900 font-medium">{bookmark.tags.length}</span>
+                  <span className="text-sm text-gray-600">Tags</span>
+                  <span className="text-sm text-gray-900 font-medium">{bookmark.tags.length}</span>
                 </div>
               </div>
             </div>
 
             {/* Tags */}
             <div className="bg-white rounded-lg shadow-sm p-6">
-              <h2 className="text-lg font-medium text-gray-900 mb-4">Tags</h2>
+              <h2 className="text-base font-medium text-gray-900 mb-4">Tags</h2>
               <div className="flex flex-wrap gap-2">
                 {bookmark.tags.map(tag => (
                   <Link

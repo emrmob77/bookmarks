@@ -1,9 +1,16 @@
 {
   "title": "Bookmarkss",
-  "description": "Your personal bookmark manages",
-  "keywords": "bookmarks, bookmark managers",
+  "description": "Your personal bookmark managers",
+  "keywords": "",
   "favicon": "/favicon.ico",
   "logo": "/logo.png",
+  "googleAnalytics": {
+    "measurementId": "",
+    "trackingCode": ""
+  },
+  "searchConsole": {
+    "verificationCode": ""
+  },
   "socialLinks": {
     "twitter": "",
     "github": "",
@@ -15,5 +22,9 @@
     "smtpPort": "",
     "smtpUser": "",
     "smtpPass": ""
+  },
+  "analytics": {
+    "googleAnalyticsId": "",
+    "searchConsoleId": ""
   }
 }

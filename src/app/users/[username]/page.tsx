@@ -39,6 +39,8 @@ export default function UserProfile() {
     joinedAt: '-',
     totalComments: 0
   });
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Kullanıcının kendi profilinde olup olmadığını kontrol et
   const isOwnProfile = user && user.username === username;
@@ -194,10 +196,29 @@ export default function UserProfile() {
   };
 
   useEffect(() => {
-    loadData();
-    // Favorileri güncelle
-    const favorites = getUserFavorites();
-    setFavoriteBookmarks(favorites);
+    let isMounted = true;
+
+    const loadDataAsync = async () => {
+      try {
+        if (isMounted) {
+          await loadData();
+          // Favorileri güncelle
+          const favorites = getUserFavorites();
+          setFavoriteBookmarks(favorites);
+        }
+      } catch (error) {
+        console.error('Veri yükleme hatası:', error);
+        if (isMounted) {
+          setError('Veriler yüklenirken bir hata oluştu');
+        }
+      }
+    };
+
+    loadDataAsync();
+
+    return () => {
+      isMounted = false;
+    };
   }, [username, user, isOwnProfile]);
 
   const handleRemoveBookmark = (id: string) => {
@@ -209,76 +230,89 @@ export default function UserProfile() {
   const handleToggleFavorite = async (id: string) => {
     if (!user) return;
     
-    // Tüm bookmarkları al
-    const allBookmarks = getBookmarks();
-    const targetBookmark = allBookmarks.find(b => b.id === id);
-    
-    if (!targetBookmark) return;
-
-    // Kullanıcının favorilerini al
-    const userFavoritesKey = `userFavorites_${user.id}`;
-    let userFavorites = [];
     try {
-      userFavorites = JSON.parse(localStorage.getItem(userFavoritesKey) || '[]');
-    } catch (error) {
-      console.error('Favori verisi parse edilemedi:', error);
-    }
-
-    const isFavorited = userFavorites.some((fav: any) => fav.bookmarkId === id);
-    let newFavorites;
-    
-    if (isFavorited) {
-      newFavorites = userFavorites.filter((fav: any) => fav.bookmarkId !== id);
-    } else {
-      const newFavorite = {
-        bookmarkId: id,
-        userId: user.id,
-        createdAt: new Date().toISOString()
-      };
-      newFavorites = [...userFavorites, newFavorite];
-    }
-
-    // Local storage'ı güncelle
-    localStorage.setItem(userFavoritesKey, JSON.stringify(newFavorites));
-
-    // Tüm kullanıcıların favorilerini topla
-    const allFavorites: any[] = [];
-    Object.keys(localStorage).forEach(key => {
-      if (key.startsWith('userFavorites_')) {
-        try {
-          const storedFavs = JSON.parse(localStorage.getItem(key) || '[]');
-          allFavorites.push(...storedFavs);
-        } catch (error) {
-          console.error('Favori verisi parse edilemedi:', error);
-        }
+      setIsLoading(true);
+      setError(null);
+      
+      // Tüm bookmarkları al
+      const allBookmarks = getBookmarks();
+      const targetBookmark = allBookmarks.find(b => b.id === id);
+      
+      if (!targetBookmark) {
+        throw new Error('Bookmark bulunamadı');
       }
-    });
 
-    // Toplam favori sayısını hesapla
-    const totalFavoriteCount = allFavorites.filter(fav => fav.bookmarkId === id).length;
+      // Kullanıcının favorilerini al
+      const userFavoritesKey = `userFavorites_${user.id}`;
+      let userFavorites = [];
+      try {
+        userFavorites = JSON.parse(localStorage.getItem(userFavoritesKey) || '[]');
+      } catch (error) {
+        console.error('Favori verisi parse edilemedi:', error);
+        throw new Error('Favori verisi yüklenemedi');
+      }
 
-    // Bookmark'ları güncelle
-    const updatedBookmarks = allBookmarks.map(bookmark =>
-      bookmark.id === id
-        ? { 
-            ...bookmark, 
-            isFavorite: !isFavorited,
-            favoriteCount: totalFavoriteCount
+      const isFavorited = userFavorites.some((fav: any) => fav.bookmarkId === id);
+      let newFavorites;
+      
+      if (isFavorited) {
+        newFavorites = userFavorites.filter((fav: any) => fav.bookmarkId !== id);
+      } else {
+        const newFavorite = {
+          bookmarkId: id,
+          userId: user.id,
+          createdAt: new Date().toISOString()
+        };
+        newFavorites = [...userFavorites, newFavorite];
+      }
+
+      // Local storage'ı güncelle
+      localStorage.setItem(userFavoritesKey, JSON.stringify(newFavorites));
+
+      // Tüm kullanıcıların favorilerini topla
+      const allFavorites: any[] = [];
+      Object.keys(localStorage).forEach(key => {
+        if (key.startsWith('userFavorites_')) {
+          try {
+            const storedFavs = JSON.parse(localStorage.getItem(key) || '[]');
+            allFavorites.push(...storedFavs);
+          } catch (error) {
+            console.error('Favori verisi parse edilemedi:', error);
           }
-        : bookmark
-    );
+        }
+      });
 
-    saveBookmarks(updatedBookmarks);
-    
-    // Sayfadaki verileri güncelle
-    loadData();
+      // Toplam favori sayısını hesapla
+      const totalFavoriteCount = allFavorites.filter(fav => fav.bookmarkId === id).length;
 
-    // Favorileri güncelle
-    const updatedFavorites = getUserFavorites();
-    setFavoriteBookmarks(updatedFavorites);
+      // Bookmark'ları güncelle
+      const updatedBookmarks = allBookmarks.map(bookmark =>
+        bookmark.id === id
+          ? { 
+              ...bookmark, 
+              isFavorite: !isFavorited,
+              favoriteCount: totalFavoriteCount
+            }
+          : bookmark
+      );
 
-    // Bookmark state'ini güncelle
-    setBookmarks(updatedBookmarks);
+      saveBookmarks(updatedBookmarks);
+      
+      // Sayfadaki verileri güncelle
+      await loadData();
+
+      // Favorileri güncelle
+      const updatedFavorites = getUserFavorites();
+      setFavoriteBookmarks(updatedFavorites);
+
+      // Bookmark state'ini güncelle
+      setBookmarks(updatedBookmarks);
+    } catch (error) {
+      console.error('Favori işlemi başarısız:', error);
+      setError(error instanceof Error ? error.message : 'Favori işlemi gerçekleştirilemedi');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleTogglePinned = (id: string) => {
@@ -618,6 +652,16 @@ export default function UserProfile() {
           </div>
         </div>
       </div>
+      {error && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+          <span className="block sm:inline">{error}</span>
+        </div>
+      )}
+      {isLoading && (
+        <div className="flex justify-center items-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+        </div>
+      )}
     </Layout>
   );
 } 

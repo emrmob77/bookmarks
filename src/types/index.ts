@@ -8,6 +8,12 @@ export interface User {
   github?: string;
   createdAt: string;
   isAdmin?: boolean;
+  role: 'user' | 'admin';
+  settings?: {
+    isApproved?: boolean;
+    isPremium?: boolean;
+    maxBookmarks?: number;
+  };
 }
 
 export interface Bookmark {
@@ -47,4 +53,28 @@ export interface Tag {
   metaDescription?: string;
   bookmarkCount: number;
   createdAt: string;
+}
+
+export interface NewBookmark {
+  id?: string;
+  title: string;
+  url: string;
+  description?: string;
+  image?: string;
+  tags: string[];
+  isPublic: boolean;
+  isPinned?: boolean;
+  isFavorite?: boolean;
+  favoriteCount?: number;
+  userId?: string;
+  username?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  comments?: Array<{
+    id: string;
+    text: string;
+    userId: string;
+    username: string;
+    createdAt: string;
+  }>;
 } 

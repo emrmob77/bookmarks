@@ -6,6 +6,15 @@ import { Bookmark } from '@/types';
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 
+interface Comment {
+  id: string;
+  text: string;
+  userId: string;
+  username: string;
+  bookmarkId: string;
+  createdAt: string;
+}
+
 interface BookmarkListProps {
   bookmarks: Bookmark[];
   onRemove: (id: string) => void;
@@ -19,17 +28,27 @@ interface BookmarkListProps {
 export default function BookmarkList({ bookmarks, onRemove, onToggleFavorite, onTogglePinned, onEdit, onAddComment, onTagClick }: BookmarkListProps) {
   const { user } = useAuth();
   const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
-  const [commentText, setCommentText] = useState('');
+  const [commentText, setCommentText] = useState<string>('');
+  const [error, setError] = useState<string | null>(null);
 
   const handleCommentClick = (bookmarkId: string) => {
+    if (!user) {
+      setError('Yorum yapmak için giriş yapmalısınız');
+      return;
+    }
     setActiveCommentId(activeCommentId === bookmarkId ? null : bookmarkId);
     setCommentText('');
+    setError(null);
   };
 
   const handleCommentSubmit = (bookmarkId: string) => {
-    if (!commentText.trim() || !user) return;
+    if (!commentText.trim() || !user) {
+      setError('Lütfen bir yorum yazın');
+      return;
+    }
     onAddComment(bookmarkId, commentText);
     setCommentText('');
+    setError(null);
   };
 
   return (
@@ -105,20 +124,23 @@ export default function BookmarkList({ bookmarks, onRemove, onToggleFavorite, on
                       <span className="ml-1 text-sm">{bookmark.comments.length}</span>
                     )}
                   </button>
-                  {user && user.email === bookmark.userId && onEdit && (
+                  {/* Düzenleme ve Silme İkonları */}
+                  {user && (user.id === bookmark.userId || user.role === 'admin') && onEdit && (
                     <button
                       onClick={() => onEdit(bookmark)}
                       className="text-gray-400 hover:text-blue-500 transition-colors"
+                      title="Düzenle"
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                       </svg>
                     </button>
                   )}
-                  {user && user.email === bookmark.userId && (
+                  {user && (user.id === bookmark.userId || user.role === 'admin') && (
                     <button
                       onClick={() => onRemove(bookmark.id)}
                       className="text-gray-400 hover:text-red-500 transition-colors"
+                      title="Sil"
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />

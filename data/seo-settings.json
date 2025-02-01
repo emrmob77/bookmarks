@@ -1,0 +1,4 @@
+{
+  "robotsTxt": "User-agent: *\nAllow: /\nDisallow: /admin/\nSitemap: http://localhost:3000/sitemap.xml emrah",
+  "sitemapUrl": "http://localhost:3000/sitemap.xml"
+}
