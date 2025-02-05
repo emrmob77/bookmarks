@@ -3,11 +3,13 @@
 import { useParams } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import Layout from '@/components/Layout';
-import { Bookmark } from '@/types';
+import { Bookmark, Comment } from '@/types';
 import { getBookmarks, deleteBookmark } from '@/lib/storage';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
+import { v4 as uuidv4 } from 'uuid';
+import { toast } from 'react-hot-toast';
 
 export default function BookmarkDetail() {
   const params = useParams();
@@ -98,24 +100,73 @@ export default function BookmarkDetail() {
   const handleAddComment = async () => {
     if (!user || !bookmark || !commentText.trim()) return;
 
-    const newComment = {
-      id: Date.now().toString(),
-      text: commentText,
-      userId: user.id,
-      username: user.username,
-      bookmarkId: bookmark.id,
-      createdAt: new Date().toISOString()
-    };
+    try {
+      const response = await fetch('/api/comments', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          bookmarkId: bookmark.id,
+          content: commentText.trim(),
+          clientCommentId: uuidv4()
+        })
+      });
 
-    const allBookmarks = await getBookmarks();
-    const updatedBookmarks = allBookmarks.map((b: Bookmark) =>
-      b.id === bookmark.id
-        ? { ...b, comments: [...(b.comments || []), newComment] }
-        : b
-    );
-    localStorage.setItem('bookmarks', JSON.stringify(updatedBookmarks));
-    setBookmark(prev => prev ? { ...prev, comments: [...(prev.comments || []), newComment] } : null);
-    setCommentText('');
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Yorum eklenirken bir hata oluştu');
+      }
+
+      console.log('Sunucudan gelen yorum verisi:', data);
+
+      // Bookmark'ı güncelle
+      setBookmark(prev => {
+        if (!prev) return null;
+        
+        const updatedComments = [...(prev.comments || [])];
+        const existingCommentIndex = updatedComments.findIndex(c => c.id === data.id);
+        
+        if (existingCommentIndex >= 0) {
+          // Varolan yorumu güncelle
+          updatedComments[existingCommentIndex] = {
+            id: data.id,
+            content: data.content,
+            userId: data.user_id,
+            username: data.username,
+            createdAt: data.created_at,
+            updatedAt: data.updated_at,
+            replyCount: 0
+          };
+        } else {
+          // Yeni yorum ekle
+          updatedComments.push({
+            id: data.id,
+            content: data.content,
+            userId: data.user_id,
+            username: data.username,
+            createdAt: data.created_at,
+            updatedAt: data.updated_at,
+            replyCount: 0
+          });
+        }
+        
+        // Yorumları tarihe göre sırala
+        updatedComments.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        
+        return {
+          ...prev,
+          comments: updatedComments
+        };
+      });
+
+      setCommentText('');
+      toast.success('Yorumunuz eklendi');
+    } catch (error: any) {
+      console.error('Yorum eklenirken hata:', error);
+      toast.error(error.message);
+    }
   };
 
   const handleEditComment = (commentId: string, text: string) => {
@@ -126,51 +177,83 @@ export default function BookmarkDetail() {
   const handleUpdateComment = async () => {
     if (!user || !bookmark || !editingCommentText.trim() || !editingCommentId) return;
 
-    const allBookmarks = await getBookmarks();
-    const updatedBookmarks = allBookmarks.map((b: Bookmark) =>
-      b.id === bookmark.id
-        ? {
-            ...b,
-            comments: (b.comments || []).map((comment: any) =>
-              comment.id === editingCommentId
-                ? { ...comment, text: editingCommentText }
-                : comment
-            )
-          }
-        : b
-    );
+    try {
+      const response = await fetch(`/api/comments/${editingCommentId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          content: editingCommentText.trim()
+        })
+      });
 
-    localStorage.setItem('bookmarks', JSON.stringify(updatedBookmarks));
-    setBookmark(prev => prev ? {
-      ...prev,
-      comments: (prev.comments || []).map(comment =>
-        comment.id === editingCommentId
-          ? { ...comment, text: editingCommentText }
-          : comment
-      )
-    } : null);
-    setEditingCommentId(null);
-    setEditingCommentText('');
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Yorum güncellenirken bir hata oluştu');
+      }
+
+      // Bookmark'ı güncelle
+      setBookmark(prev => {
+        if (!prev) return null;
+        
+        return {
+          ...prev,
+          comments: prev.comments?.map(comment =>
+            comment.id === editingCommentId
+              ? {
+                  ...comment,
+                  content: editingCommentText.trim(),
+                  updatedAt: new Date().toISOString()
+                }
+              : comment
+          )
+        };
+      });
+
+      setEditingCommentId(null);
+      setEditingCommentText('');
+      toast.success('Yorum güncellendi');
+    } catch (error: any) {
+      console.error('Yorum güncellenirken hata:', error);
+      toast.error(error.message);
+    }
   };
 
-  const handleDeleteComment = async () => {
+  const handleDeleteComment = async (commentId: string) => {
     if (!user || !bookmark) return;
 
-    const allBookmarks = await getBookmarks();
-    const updatedBookmarks = allBookmarks.map((b: Bookmark) =>
-      b.id === bookmark.id
-        ? {
-            ...b,
-            comments: (b.comments || []).filter((comment: any) => comment.id !== editingCommentId)
-          }
-        : b
-    );
+    // Silme işlemini onayla
+    if (!confirm('Bu yorumu silmek istediğinizden emin misiniz?')) {
+      return;
+    }
 
-    localStorage.setItem('bookmarks', JSON.stringify(updatedBookmarks));
-    setBookmark(prev => prev ? {
-      ...prev,
-      comments: (prev.comments || []).filter(comment => comment.id !== editingCommentId)
-    } : null);
+    try {
+      const response = await fetch(`/api/comments/${commentId}`, {
+        method: 'DELETE'
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Yorum silinirken bir hata oluştu');
+      }
+
+      // Bookmark'ı güncelle
+      setBookmark(prev => {
+        if (!prev) return null;
+        
+        return {
+          ...prev,
+          comments: prev.comments?.filter(comment => comment.id !== commentId)
+        };
+      });
+
+      toast.success('Yorum silindi');
+    } catch (error: any) {
+      console.error('Yorum silinirken hata:', error);
+      toast.error(error.message);
+    }
   };
 
   const handleCancelEdit = () => {
@@ -288,22 +371,27 @@ export default function BookmarkDetail() {
                         </div>
                       </div>
                       <div className="flex-1">
-                        <textarea
-                          value={commentText}
-                          onChange={(e) => setCommentText(e.target.value)}
-                          placeholder="Write a comment..."
-                          className="w-full px-4 py-2 text-base border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                          rows={3}
-                        />
-                        <div className="mt-3 flex justify-end">
-                          <button
-                            onClick={handleAddComment}
-                            disabled={!commentText.trim()}
-                            className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
-                          >
-                            Add Comment
-                          </button>
-                        </div>
+                        <form onSubmit={(e) => {
+                          e.preventDefault();
+                          handleAddComment();
+                        }}>
+                          <textarea
+                            value={commentText}
+                            onChange={(e) => setCommentText(e.target.value)}
+                            placeholder="Write a comment..."
+                            className="w-full px-4 py-2 text-base border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                            rows={3}
+                          />
+                          <div className="mt-3 flex justify-end">
+                            <button
+                              type="submit"
+                              disabled={!commentText.trim()}
+                              className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
+                            >
+                              Add Comment
+                            </button>
+                          </div>
+                        </form>
                       </div>
                     </div>
                   </div>
@@ -312,7 +400,9 @@ export default function BookmarkDetail() {
                 {/* Comments List */}
                 <div className="space-y-4">
                   {bookmark.comments && bookmark.comments.length > 0 ? (
-                    bookmark.comments.map(comment => (
+                    [...bookmark.comments]
+                      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                      .map(comment => (
                       <div key={comment.id} className="flex items-start space-x-3">
                         <div className="flex-shrink-0">
                           <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center">
@@ -332,12 +422,21 @@ export default function BookmarkDetail() {
                               </Link>
                               <div className="flex items-center space-x-2">
                                 <span className="text-sm text-gray-500">
-                                  {format(new Date(comment.createdAt), 'MMM d, HH:mm')}
+                                  {(() => {
+                                    try {
+                                      return comment.createdAt ? 
+                                        format(new Date(comment.createdAt), 'MMM d, HH:mm') :
+                                        'Tarih bilgisi yok';
+                                    } catch (error) {
+                                      console.error('Tarih formatlanırken hata:', error);
+                                      return 'Geçersiz tarih';
+                                    }
+                                  })()}
                                 </span>
                                 {user && user.username === comment.username && (
                                   <div className="flex items-center space-x-2">
                                     <button
-                                      onClick={() => handleEditComment(comment.id, comment.text)}
+                                      onClick={() => handleEditComment(comment.id, comment.content)}
                                       className="text-gray-400 hover:text-blue-600 transition-colors duration-200"
                                       title="Edit comment"
                                     >
@@ -346,7 +445,7 @@ export default function BookmarkDetail() {
                                       </svg>
                                     </button>
                                     <button
-                                      onClick={handleDeleteComment}
+                                      onClick={() => handleDeleteComment(comment.id)}
                                       className="text-gray-400 hover:text-red-600 transition-colors duration-200"
                                       title="Delete comment"
                                     >
@@ -383,7 +482,7 @@ export default function BookmarkDetail() {
                                 </div>
                               </div>
                             ) : (
-                              <p className="text-sm text-gray-700 leading-relaxed">{comment.text}</p>
+                              <p className="text-sm text-gray-700 leading-relaxed">{comment.content}</p>
                             )}
                           </div>
                         </div>

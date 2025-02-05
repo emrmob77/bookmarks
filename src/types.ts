@@ -18,12 +18,15 @@ export interface BaseComment {
   id: string;
   userId: string;
   username: string;
-  text: string;
+  content: string;
   createdAt: string;
 }
 
 export interface Comment extends BaseComment {
   bookmarkId: string;
+  parentId?: string;
+  replyCount: number;
+  updatedAt: string;
 }
 
 export interface BookmarkComment extends BaseComment {
@@ -96,3 +99,25 @@ export interface UserFavorite {
 }
 
 export type NewBookmark = Omit<Bookmark, 'id' | 'comments' | 'favoriteCount' | 'isPinned' | 'isFavorite' | 'isOwner' | 'createdAt'>;
+
+export interface NewComment {
+  bookmarkId: string;
+  content: string;
+  parentId?: string;
+  clientCommentId?: string;
+}
+
+export interface CommentResponse {
+  comments: Comment[];
+  pagination: {
+    currentPage: number;
+    totalPages: number;
+    totalItems: number;
+  };
+}
+
+export interface FavoriteResponse {
+  success: boolean;
+  action: 'added' | 'removed';
+  favoriteCount: number;
+}

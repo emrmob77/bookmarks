@@ -6,10 +6,12 @@ import Layout from '@/components/Layout';
 import BookmarkList from '@/components/BookmarkList';
 import { Bookmark } from '@/types';
 import { getBookmarks, saveBookmarks } from '@/lib/storage';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function TagPage() {
   const params = useParams();
   const name = params.name as string;
+  const { user } = useAuth();
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
 
   // Load bookmarks from localStorage on mount
@@ -50,11 +52,13 @@ export default function TagPage() {
               ...(bookmark.comments || []),
               {
                 id: Date.now().toString(),
-                userId: 'current-user',
-                username: 'current-user',
-                text: commentText,
+                content: commentText,
+                userId: user.id,
+                username: user.username,
+                bookmarkId: bookmark.id,
                 createdAt: new Date().toISOString(),
-                bookmarkId
+                updatedAt: new Date().toISOString(),
+                replyCount: 0
               }
             ]
           }

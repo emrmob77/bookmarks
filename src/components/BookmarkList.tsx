@@ -6,6 +6,7 @@ import type { Bookmark, Comment } from '@/types';
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import toast from '@/lib/toast';
+import { v4 as uuidv4 } from 'uuid';
 
 interface BookmarkListProps {
   bookmarks: Bookmark[];
@@ -20,9 +21,13 @@ interface BookmarkListProps {
 export default function BookmarkList({ bookmarks, onRemove, onToggleFavorite, onTogglePinned, onEdit, onAddComment, onTagClick }: BookmarkListProps) {
   const { user } = useAuth();
   const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
-  const [commentText, setCommentText] = useState<string>('');
+  const [commentText, setCommentText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<{ [key: string]: boolean }>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formClientId, setFormClientId] = useState<string | null>(null);
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editingCommentText, setEditingCommentText] = useState('');
 
   const handleCommentClick = (bookmarkId: string) => {
     if (!user) {
@@ -32,22 +37,68 @@ export default function BookmarkList({ bookmarks, onRemove, onToggleFavorite, on
     setActiveCommentId(activeCommentId === bookmarkId ? null : bookmarkId);
     setCommentText('');
     setError(null);
+    setFormClientId(uuidv4());
+  };
+
+  const handleKeyPress = async (e: React.KeyboardEvent<HTMLInputElement>, bookmarkId: string) => {
+    if (e.key === 'Enter' && !e.shiftKey && !isSubmitting) {
+      e.preventDefault();
+      setIsSubmitting(true);
+      await handleCommentSubmit(bookmarkId);
+      setIsSubmitting(false);
+    }
   };
 
   const handleCommentSubmit = async (bookmarkId: string) => {
-    if (!commentText.trim() || !user) {
-      setError('Please enter a comment');
+    if (!commentText.trim() || !user || !formClientId) {
+      setError('Lütfen bir yorum yazın');
+      return;
+    }
+
+    if (loading[bookmarkId]) {
       return;
     }
 
     try {
       setLoading(prev => ({ ...prev, [bookmarkId]: true }));
-      await onAddComment(bookmarkId, commentText);
+      
+      console.log('Yorum gönderiliyor:', {
+        bookmarkId,
+        content: commentText.trim(),
+        clientCommentId: formClientId
+      });
+
+      const response = await fetch('/api/comments', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          bookmarkId,
+          content: commentText.trim(),
+          clientCommentId: formClientId
+        })
+      });
+
+      const data = await response.json();
+      console.log('Sunucu yanıtı:', data);
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Yorum eklenirken bir hata oluştu');
+      }
+
       setCommentText('');
       setError(null);
       setActiveCommentId(null);
+      setFormClientId(null);
+      
+      if (onAddComment) {
+        onAddComment(bookmarkId, data);
+      }
     } catch (error: any) {
-      setError(error.message || 'Failed to add comment');
+      console.error('Error adding comment:', error);
+      setError(error.message || 'Yorum eklenirken bir hata oluştu');
+      throw error;
     } finally {
       setLoading(prev => ({ ...prev, [bookmarkId]: false }));
     }
@@ -63,6 +114,79 @@ export default function BookmarkList({ bookmarks, onRemove, onToggleFavorite, on
     } finally {
       setLoading(prev => ({ ...prev, [id]: false }));
     }
+  };
+
+  const handleEditComment = (commentId: string, text: string) => {
+    setEditingCommentId(commentId);
+    setEditingCommentText(text);
+  };
+
+  const handleUpdateComment = async (bookmarkId: string) => {
+    if (!user || !editingCommentText.trim() || !editingCommentId) return;
+
+    try {
+      const response = await fetch(`/api/comments/${editingCommentId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          content: editingCommentText.trim()
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Yorum güncellenirken bir hata oluştu');
+      }
+
+      // Bookmark'ı güncelle
+      if (onAddComment) {
+        onAddComment(bookmarkId, data);
+      }
+
+      setEditingCommentId(null);
+      setEditingCommentText('');
+      toast.success('Yorum güncellendi');
+    } catch (error: any) {
+      console.error('Yorum güncellenirken hata:', error);
+      toast.error(error.message);
+    }
+  };
+
+  const handleDeleteComment = async (bookmarkId: string, commentId: string) => {
+    if (!user) return;
+
+    // Silme işlemini onayla
+    if (!confirm('Bu yorumu silmek istediğinizden emin misiniz?')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/comments/${commentId}`, {
+        method: 'DELETE'
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Yorum silinirken bir hata oluştu');
+      }
+
+      if (onAddComment) {
+        onAddComment(bookmarkId, { deleted: true, commentId });
+      }
+
+      toast.success('Yorum silindi');
+    } catch (error: any) {
+      console.error('Yorum silinirken hata:', error);
+      toast.error(error.message);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingCommentId(null);
+    setEditingCommentText('');
   };
 
   return (
@@ -218,26 +342,47 @@ export default function BookmarkList({ bookmarks, onRemove, onToggleFavorite, on
 
               {activeCommentId === bookmark.id && (
                 <div className="mt-4">
-                  <div className="flex space-x-2">
+                  <form 
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      if (isSubmitting) return;
+                      
+                      try {
+                        setIsSubmitting(true);
+                        await handleCommentSubmit(bookmark.id);
+                      } catch (error) {
+                        // Hata zaten handleCommentSubmit içinde işleniyor
+                      } finally {
+                        setIsSubmitting(false);
+                      }
+                    }}
+                    className="flex flex-col space-y-2"
+                  >
                     <input
                       type="text"
                       value={commentText}
-                      onChange={(e) => setCommentText(e.target.value)}
+                      onChange={(e) => {
+                        setCommentText(e.target.value);
+                        setError(null); // Input değiştiğinde hata mesajını temizle
+                      }}
+                      onKeyPress={(e) => handleKeyPress(e, bookmark.id)}
                       placeholder="Write your comment..."
                       className="flex-1 min-w-0 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                      onKeyPress={(e) => {
-                        if (e.key === 'Enter') {
-                          handleCommentSubmit(bookmark.id);
-                        }
-                      }}
+                      disabled={loading[bookmark.id] || isSubmitting}
                     />
-                    <button
-                      onClick={() => handleCommentSubmit(bookmark.id)}
-                      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                    >
-                      Send
-                    </button>
-                  </div>
+                    {error && (
+                      <p className="text-sm text-red-600">{error}</p>
+                    )}
+                    <div className="flex justify-end">
+                      <button
+                        type="submit"
+                        className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled={loading[bookmark.id] || isSubmitting || !commentText.trim()}
+                      >
+                        {loading[bookmark.id] || isSubmitting ? 'Gönderiliyor...' : 'Gönder'}
+                      </button>
+                    </div>
+                  </form>
                 </div>
               )}
 
@@ -254,10 +399,71 @@ export default function BookmarkList({ bookmarks, onRemove, onToggleFavorite, on
                           </Link>
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-gray-500">{typedComment.text}</p>
-                          <p className="text-xs text-gray-400 mt-1">
-                            {format(new Date(typedComment.createdAt), 'MMM d, yyyy HH:mm')}
-                          </p>
+                          {editingCommentId === typedComment.id ? (
+                            <div>
+                              <textarea
+                                value={editingCommentText}
+                                onChange={(e) => setEditingCommentText(e.target.value)}
+                                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                                rows={3}
+                              />
+                              <div className="mt-3 flex justify-end space-x-2">
+                                <button
+                                  onClick={handleCancelEdit}
+                                  className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 transition-colors duration-200"
+                                >
+                                  İptal
+                                </button>
+                                <button
+                                  onClick={() => handleUpdateComment(bookmark.id)}
+                                  disabled={!editingCommentText.trim()}
+                                  className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
+                                >
+                                  Kaydet
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <p className="text-gray-500">{typedComment.content}</p>
+                              <div className="flex items-center justify-between mt-1">
+                                <p className="text-xs text-gray-400">
+                                  {(() => {
+                                    try {
+                                      return typedComment.createdAt ? 
+                                        format(new Date(typedComment.createdAt), 'dd MMM yyyy HH:mm') :
+                                        'Tarih bilgisi yok';
+                                    } catch (error) {
+                                      console.error('Tarih formatlanırken hata:', error);
+                                      return 'Geçersiz tarih';
+                                    }
+                                  })()}
+                                </p>
+                                {user && user.username === typedComment.username && (
+                                  <div className="flex items-center space-x-2">
+                                    <button
+                                      onClick={() => handleEditComment(typedComment.id, typedComment.content)}
+                                      className="text-gray-400 hover:text-blue-600 transition-colors duration-200"
+                                      title="Yorumu düzenle"
+                                    >
+                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                      </svg>
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteComment(bookmark.id, typedComment.id)}
+                                      className="text-gray-400 hover:text-red-600 transition-colors duration-200"
+                                      title="Yorumu sil"
+                                    >
+                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                      </svg>
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            </>
+                          )}
                         </div>
                       </div>
                     );

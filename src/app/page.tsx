@@ -5,11 +5,12 @@ import Link from 'next/link';
 import Layout from '@/components/Layout';
 import BookmarkList from '@/components/BookmarkList';
 import SearchBar from '@/components/SearchBar';
-import { Bookmark, Comment } from '@/types';
+import { Bookmark, Comment, FavoriteResponse } from '@/types';
 import { getBookmarks, updateBookmark, toggleFavorite } from '@/lib/storage';
 import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import { toast } from 'react-hot-toast';
+import { v4 as uuidv4 } from 'uuid';
 
 export default function Home() {
   const { user } = useAuth();
@@ -57,7 +58,13 @@ export default function Home() {
     if (!user) return;
 
     try {
-      const result = await toggleFavorite(id);
+      const response = await fetch(`/api/bookmarks/favorite`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookmarkId: id }),
+      });
+
+      const result: FavoriteResponse = await response.json();
       
       // Bookmark state'ini güncelle
       setBookmarks(prev => prev.map(bookmark =>
@@ -65,7 +72,7 @@ export default function Home() {
           ? {
               ...bookmark,
               isFavorite: result.action === 'added',
-              favoriteCount: result.favoriteCount // API'den gelen güncel favori sayısını kullan
+              favoriteCount: result.favoriteCount || bookmark.favoriteCount || 0
             }
           : bookmark
       ));
@@ -77,35 +84,16 @@ export default function Home() {
     }
   };
 
-  const handleAddComment = async (bookmarkId: string, commentText: string) => {
+  const handleAddComment = async (bookmarkId: string, commentData: any) => {
     if (!user) return;
 
     try {
-      const bookmark = bookmarks.find(b => b.id === bookmarkId);
-      if (!bookmark) return;
-
-      const newComment = {
-        id: Math.random().toString(36).substr(2, 9),
-        text: commentText, // Comment interface'inde text kullanıyoruz
-        userId: user.id,
-        username: user.username,
-        bookmarkId,
-        createdAt: new Date().toISOString()
-      };
-
-      const updatedBookmark = {
-        ...bookmark,
-        comments: [...(bookmark.comments || []), newComment]
-      };
-
-      await updateBookmark(updatedBookmark);
-
-      const updatedBookmarks = bookmarks.map(b =>
-        b.id === bookmarkId ? updatedBookmark : b
-      );
-      setBookmarks(updatedBookmarks);
-    } catch (error) {
-      console.error('Error adding comment:', error);
+      // Bookmark'ları yeniden yükle
+      const loadedBookmarks = await getBookmarks();
+      setBookmarks(loadedBookmarks);
+    } catch (error: any) {
+      console.error('Error updating bookmarks:', error);
+      toast.error('Yorumlar güncellenirken bir hata oluştu');
     }
   };
 
@@ -248,7 +236,7 @@ export default function Home() {
                             >
                               {comment.bookmarkTitle}
                             </Link>
-                            <p className="mt-1 text-sm text-gray-700">{comment.text}</p>
+                            <p className="mt-1 text-sm text-gray-700">{comment.content}</p>
                           </div>
                         </div>
                       </div>

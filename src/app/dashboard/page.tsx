@@ -25,7 +25,12 @@ export default function Dashboard() {
     const fetchBookmarks = async () => {
       setLoading(true);
       try {
-        const data = await getBookmarks();
+        const data = await getBookmarks({
+          ...(activeTab !== 'favorites' ? { userId: user?.id } : {}),
+          page: 1,
+          limit: 10,
+          ...(activeTab === 'favorites' ? { favorites: true } : {})
+        });
         setBookmarks(data);
       } catch (error) {
         console.error('Error fetching bookmarks:', error);
@@ -33,7 +38,7 @@ export default function Dashboard() {
       setLoading(false);
     };
     fetchBookmarks();
-  }, []);
+  }, [user, activeTab]);
 
   const handleAddBookmark = async (bookmark: NewBookmark) => {
     if (!user) return;
@@ -184,11 +189,13 @@ export default function Dashboard() {
 
       const newComment: Comment = {
         id: Date.now().toString(),
-        text: commentText,
+        content: commentText,
         userId: user.id,
         username: user.username,
         bookmarkId,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        replyCount: 0
       };
 
       const updatedBookmark = {

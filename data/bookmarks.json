@@ -1,52 +1,53 @@
 [
   {
-    "id": "15330129-7ab4-4640-a944-093a0fb7c637",
-    "url": "https://ozelrehber.com",
-    "title": "Özel Rehbear: Haber ve Özel Hazırlanmış Rehberler",
-    "description": "Özel rehber web sitesi haber odaklı içerikleri ve özel hazırlanmış, gezi, ekonomi, e-devlet vb. gibi içerikleri yayında!",
+    "id": "fa3a4a5d-4075-4444-b9da-b96f5eb313af",
+    "url": "https://mobitek.com/seo",
+    "title": "SEO Nedir ve Nasıl Yapılır? - Mobitek",
+    "description": "SEO, daha fazla gelir ve trafik etmek amacıyla, web sitelerinin organik arama sonuçlarında görünürlüğünü arttırmak için yapılan çalışmaların tümüdür.",
     "image": null,
     "tags": [
-      "sem",
-      "seo1"
+      "saats"
     ],
     "isPublic": true,
-    "isPinned": false,
-    "isFavorite": false,
-    "favoriteCount": 0,
-    "userId": "8841e333-4baf-49d7-822f-8aa970c9e97c",
-    "username": "emrmob7",
-    "createdAt": "2025-02-05T13:58:00.000Z",
-    "updatedAt": "2025-02-05T15:53:26.000Z",
+    "isPinned": true,
+    "isFavorite": true,
+    "favoriteCount": 1,
+    "userId": "1",
+    "username": "admin",
+    "createdAt": "2025-02-05T13:51:49.000Z",
+    "updatedAt": "2025-02-05T15:53:48.000Z",
     "viewCount": 0,
     "commentCount": 0,
     "comments": [
       {
-        "id": "s6gc3djuw",
+        "id": "63d1swdfu",
         "userId": "8841e333-4baf-49d7-822f-8aa970c9e97c",
         "username": "emrmob7",
-        "text": "merhaba",
-        "bookmarkId": "15330129-7ab4-4640-a944-093a0fb7c637",
-        "createdAt": "2025-02-05T16:13:58.655Z"
+        "text": "rest",
+        "bookmarkId": "fa3a4a5d-4075-4444-b9da-b96f5eb313af",
+        "createdAt": "2025-02-05T18:40:10.211Z"
       }
     ]
   },
   {
-    "id": "7fa01fd7-be7a-4adb-8f91-dc154c9be832",
+    "id": "fb655622-1c9d-455e-a2be-3f86cd836a7e",
     "url": "https://seoroas.com",
     "title": "SEOROAS: Organik Büyüme Ajansı",
     "description": "SEOROAS: Organik büyüme ajansı olarak hizmet vermektedir. SEO'nun yanı sıra dijital pazarlama kanallarının tamamında aktif rol alır.",
     "image": null,
     "tags": [
-      "seo"
+      "test",
+      "test2",
+      "test3"
     ],
     "isPublic": true,
     "isPinned": false,
-    "isFavorite": false,
-    "favoriteCount": 0,
-    "userId": "8841e333-4baf-49d7-822f-8aa970c9e97c",
-    "username": "emrmob7",
-    "createdAt": "2025-02-05T13:57:44.000Z",
-    "updatedAt": "2025-02-05T13:57:44.000Z",
+    "isFavorite": true,
+    "favoriteCount": 2,
+    "userId": "1",
+    "username": "admin",
+    "createdAt": "2025-02-05T13:50:37.000Z",
+    "updatedAt": "2025-02-05T14:17:42.000Z",
     "viewCount": 0,
     "commentCount": 0,
     "comments": []

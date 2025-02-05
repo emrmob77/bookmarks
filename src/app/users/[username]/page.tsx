@@ -8,7 +8,10 @@ import Link from 'next/link';
 import { format } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
 import BookmarkList from '@/components/BookmarkList';
-import { Bookmark } from '@/types';
+import { Bookmark, Comment } from '@/types';
+import { toast } from 'react-hot-toast';
+import SearchBar from '@/components/SearchBar';
+import { v4 as uuidv4 } from 'uuid';
 
 type TabType = 'bookmarks' | 'favorites' | 'comments';
 
@@ -23,13 +26,9 @@ interface UserProfile {
   isApproved?: boolean;
 }
 
-interface Comment {
-  id: string;
-  userId: string;
-  username: string;
-  text: string;
+interface UserFavorite {
   bookmarkId: string;
-  createdAt: string;
+  userId: string;
 }
 
 export default function UserProfile() {
@@ -41,6 +40,7 @@ export default function UserProfile() {
   const [favoriteBookmarks, setFavoriteBookmarks] = useState<Bookmark[]>([]);
   const [bookmarksWithComments, setBookmarksWithComments] = useState<Bookmark[]>([]);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
   const [userStats, setUserStats] = useState({
     totalBookmarks: 0,
     publicBookmarks: 0,
@@ -74,179 +74,183 @@ export default function UserProfile() {
       // Tüm bookmarkları al
       const allBookmarks = await getBookmarks();
 
-      // Tüm kullanıcıların favorilerini topla
-      const allFavorites: any[] = [];
-      Object.keys(localStorage).forEach(key => {
-        if (key.startsWith('userFavorites_')) {
-          try {
-            const storedFavs = JSON.parse(localStorage.getItem(key) || '[]');
-            allFavorites.push(...storedFavs);
-          } catch (error) {
-            console.error('Favori verisi parse edilemedi:', error);
-          }
-        }
-      });
-
       // Favori bookmarkları işaretle ve döndür
-      const favoriteBookmarks = userFavorites.map((fav: any) => {
-        const bookmark = allBookmarks.find((b: Bookmark) => b.id === fav.bookmarkId);
-        if (!bookmark) return null;
-
-        return {
+      return allBookmarks
+        .filter(bookmark => userFavorites.some((fav: UserFavorite) => fav.bookmarkId === bookmark.id))
+        .map(bookmark => ({
           ...bookmark,
-          isFavorite: true,
-          favoriteCount: allFavorites.filter(f => f.bookmarkId === bookmark.id).length
-        };
-      }).filter(Boolean);
-
-      return favoriteBookmarks;
+          isFavorite: true
+        }));
     } catch (error) {
       console.error('Favori verisi yüklenirken hata:', error);
       return [];
     }
   };
 
-  const updateUserRecord = () => {
-    let allUsers: any[] = [];
+  const handleAddComment = async (bookmarkId: string, commentText: string) => {
+    if (!user) return;
+
     try {
-      const usersData = localStorage.getItem('users');
-      if (usersData) {
-        allUsers = JSON.parse(usersData);
+      const response = await fetch('/api/comments', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          bookmarkId,
+          content: commentText,
+          clientCommentId: uuidv4()
+        })
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Yorum eklenirken bir hata oluştu');
       }
+
+      const newComment = await response.json();
+
+      // Sadece ilgili bookmark'ı güncelle
+      setBookmarks(prevBookmarks => 
+        prevBookmarks.map(bookmark => {
+          if (bookmark.id === bookmarkId) {
+            return {
+              ...bookmark,
+              comments: [...(bookmark.comments || []), newComment]
+            };
+          }
+          return bookmark;
+        })
+      );
+
+      // Yorumlu bookmarkları güncelle
+      setBookmarksWithComments(prevBookmarks => {
+        const bookmarkExists = prevBookmarks.some(b => b.id === bookmarkId);
+        if (!bookmarkExists) {
+          const bookmark = bookmarks.find(b => b.id === bookmarkId);
+          if (bookmark) {
+            return [...prevBookmarks, {
+              ...bookmark,
+              comments: [newComment]
+            }];
+          }
+        }
+        return prevBookmarks.map(bookmark => {
+          if (bookmark.id === bookmarkId) {
+            return {
+              ...bookmark,
+              comments: [...(bookmark.comments || []), newComment]
+            };
+          }
+          return bookmark;
+        });
+      });
+    } catch (error: any) {
+      console.error('Error adding comment:', error);
+      toast.error(error.message);
+    }
+  };
+
+  const loadUserProfile = async () => {
+    try {
+      const response = await fetch(`/api/users/${username}`);
+      if (!response.ok) {
+        throw new Error('Kullanıcı profili yüklenemedi');
+      }
+      
+      const data = await response.json();
+      setUserProfile(data.profile);
+      setUserStats(prev => ({
+        ...prev,
+        totalBookmarks: data.stats.totalBookmarks,
+        publicBookmarks: data.stats.publicBookmarks,
+        privateBookmarks: data.stats.privateBookmarks,
+        favorites: data.stats.favorites,
+        totalComments: data.stats.totalComments,
+        joinedAt: data.profile.createdAt ? format(new Date(data.profile.createdAt), 'dd MMM yyyy') : '-'
+      }));
+      
+      return data.profile;
     } catch (error) {
-      console.error('Kullanıcılar yüklenirken hata:', error);
+      console.error('Profil yüklenirken hata:', error);
+      throw new Error('Profil yüklenemedi');
     }
-    const userIndex = allUsers.findIndex(u => u.username === user?.username);
-    if (userIndex !== -1) {
-      // Mevcut kullanıcıyı güncelle
-      allUsers[userIndex] = { ...allUsers[userIndex], ...user };
-    } else if (user) {
-      // Yeni kullanıcı kaydı ekle
-      allUsers.push(user);
-    }
-    localStorage.setItem('users', JSON.stringify(allUsers));
   };
 
   const loadData = async () => {
-    updateUserRecord();
-
-    // Tüm kullanıcıları al
-    let allUsers: any[] = [];
     try {
-      const usersData = localStorage.getItem('users');
-      if (usersData) {
-        allUsers = JSON.parse(usersData);
-      }
+      setIsLoading(true);
+      setError(null);
+
+      // Kullanıcı profilini yükle
+      await loadUserProfile();
+      
+      // Tüm yer imlerini tek seferde al
+      const allBookmarks = await getBookmarks();
+      
+      // Kullanıcının kendi yer imleri
+      const userBookmarks = allBookmarks.filter(b => b.username === username && (b.isPublic || isOwnProfile));
+
+      // Kullanıcının yorum yaptığı yer imleri
+      const bookmarksWithUserComments = allBookmarks.filter(bookmark => 
+        bookmark.comments?.some(comment => 
+          comment.username === username && 
+          (bookmark.isPublic || isOwnProfile)
+        )
+      );
+
+      // Kullanıcının favorilerini getir
+      const favorites = await getUserFavorites();
+
+      // State'leri güncelle
+      setFavoriteBookmarks(favorites);
+      setBookmarks(userBookmarks.map(bookmark => ({
+        ...bookmark,
+        isFavorite: favorites.some(fav => fav.id === bookmark.id),
+        favoriteCount: favorites.filter(fav => fav.id === bookmark.id).length
+      })));
+      setBookmarksWithComments(bookmarksWithUserComments);
+
     } catch (error) {
-      console.error('Kullanıcılar yüklenirken hata:', error);
-    }
-
-    // Profil sayfasındaki kullanıcıyı bul
-    const profile = allUsers.find(u => u.username === username);
-    setUserProfile(profile || null);
-
-    // Tüm yer imlerini al
-    const allBookmarks = await getBookmarks();
-    
-    // Kullanıcının kendi yer imleri
-    const userBookmarks = allBookmarks.filter(b => b.username === username && (b.isPublic || isOwnProfile));
-
-    // Tüm kullanıcıların favorilerini topla
-    const allFavorites: any[] = [];
-    Object.keys(localStorage).forEach(key => {
-      if (key.startsWith('userFavorites_')) {
-        try {
-          const storedFavs = JSON.parse(localStorage.getItem(key) || '[]');
-          allFavorites.push(...storedFavs);
-        } catch (error) {
-          console.error('Favori verisi parse edilemedi:', error);
-        }
-      }
-    });
-
-    // Bookmark'ları favori durumları ile işaretle
-    const markedBookmarks = userBookmarks.map(bookmark => ({
-      ...bookmark,
-      isFavorite: user ? allFavorites.some(fav => fav.bookmarkId === bookmark.id && fav.userId === user.id) : false,
-      favoriteCount: allFavorites.filter(fav => fav.bookmarkId === bookmark.id).length
-    }));
-
-    setBookmarks(markedBookmarks);
-
-    // Kullanıcının yorum yaptığı yer imleri
-    const bookmarksWithUserComments = allBookmarks.filter(bookmark => 
-      bookmark.comments?.some(comment => comment.username === username)
-    );
-    setBookmarksWithComments(bookmarksWithUserComments);
-
-    // İstatistikleri güncelle
-    const profileUserId = profile?.id;
-    const userFavoriteBookmarks = profileUserId ? 
-      allFavorites.filter(fav => fav.userId === profileUserId) : [];
-
-    setUserStats({
-      totalBookmarks: userBookmarks.length,
-      publicBookmarks: userBookmarks.filter(b => b.isPublic).length,
-      privateBookmarks: userBookmarks.filter(b => !b.isPublic).length,
-      favorites: userFavoriteBookmarks.length,
-      joinedAt: profile?.createdAt ? new Date(profile.createdAt).toLocaleDateString('tr-TR') : '-',
-      totalComments: bookmarksWithUserComments.reduce((total, bookmark) => 
-        total + (bookmark.comments?.filter(comment => comment.username === username).length || 0), 0
-      )
-    });
-
-    // After obtaining the profile from local storage
-    if (profile) {
-      // Update profile with social media fields from authUser if missing
-      profile.website = profile.website || profileUserId?.website;
-      profile.twitter = profile.twitter || profileUserId?.twitter;
-      profile.github = profile.github || profileUserId?.github;
-      profile.bio = profile.bio || profileUserId?.bio;
+      console.error('Veri yüklenirken hata:', error);
+      setError(error instanceof Error ? error.message : 'Veriler yüklenirken bir hata oluştu');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    const loadUserProfile = async () => {
-      setIsLoading(true);
-      setError(null);
+    let mounted = true;
+    let loadingTimeout: NodeJS.Timeout;
+
+    const loadDataWithDelay = async () => {
+      if (!username || isLoading) return;
+
       try {
-        const { profile, stats } = await getUserProfile(username);
-        setUserProfile(profile);
-        setUserStats({
-          totalBookmarks: stats.totalBookmarks,
-          publicBookmarks: stats.publicBookmarks,
-          privateBookmarks: stats.privateBookmarks,
-          favorites: stats.favorites,
-          totalComments: stats.totalComments,
-          joinedAt: format(new Date(profile.createdAt), 'dd MMM yyyy')
-        });
-
-        // Kullanıcının bookmarklarını getir
-        const allBookmarks = await getBookmarks();
-        const userBookmarks = allBookmarks.filter((b: Bookmark) => 
-          b.username === username && (b.isPublic || isOwnProfile)
-        );
-        setBookmarks(userBookmarks);
-
-        // Kullanıcının favorilerini getir
-        const favorites = await getUserFavorites();
-        setFavoriteBookmarks(favorites);
-
-        // Kullanıcının yorumlu bookmarklarını getir
-        const bookmarksWithComments = userBookmarks.filter((b: Bookmark) => b.comments && b.comments.length > 0);
-        setBookmarksWithComments(bookmarksWithComments);
-      } catch (err: any) {
-        setError(err.message);
-        console.error('Profil yüklenirken hata:', err);
+        setIsLoading(true);
+        setError(null);
+        await loadData();
+      } catch (err) {
+        if (mounted) {
+          console.error('Veri yükleme hatası:', err);
+          setError(err instanceof Error ? err.message : 'Bir hata oluştu');
+        }
       } finally {
-        setIsLoading(false);
+        if (mounted) {
+          loadingTimeout = setTimeout(() => {
+            setIsLoading(false);
+          }, 100);
+        }
       }
     };
 
-    if (username) {
-      loadUserProfile();
-    }
-  }, [username, isOwnProfile]);
+    loadDataWithDelay();
+
+    return () => {
+      mounted = false;
+      clearTimeout(loadingTimeout);
+    };
+  }, [username, user]);
 
   const handleDeleteBookmark = async (bookmarkId: string) => {
     if (!user) {
@@ -315,43 +319,24 @@ export default function UserProfile() {
     await saveBookmarks(updatedBookmarks);
   };
 
-  const handleAddComment = async (bookmarkId: string, commentText: string) => {
-    if (!user) return;
-
-    const updatedBookmarks = bookmarks.map(bookmark =>
-      bookmark.id === bookmarkId
-        ? {
-            ...bookmark,
-            comments: [
-              ...(bookmark.comments || []),
-              {
-                id: Math.random().toString(36).substr(2, 9),
-                userId: user.id,
-                username: user.username,
-                text: commentText,
-                bookmarkId: bookmarkId,
-                createdAt: new Date().toISOString()
-              } as Comment
-            ]
-          }
-        : bookmark
-    );
-    setBookmarks(updatedBookmarks);
-    await saveBookmarks(updatedBookmarks);
-  };
-
   const handleTagClick = (tagName: string) => {
     // Tag'e tıklandığında yapılacak işlemler
     window.location.href = `/tags/${encodeURIComponent(tagName)}`;
   };
 
   const processBookmarksWithComments = (bookmarks: Bookmark[]) => {
-    return bookmarks.map(bookmark => ({
-      ...bookmark,
-      comments: bookmark.comments?.sort((a: Comment, b: Comment) => 
+    return bookmarks.map(bookmark => {
+      if (!bookmark.comments) return bookmark;
+      
+      const sortedComments = [...bookmark.comments].sort((a: Comment, b: Comment) => 
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      )
-    }));
+      );
+      
+      return {
+        ...bookmark,
+        comments: sortedComments
+      };
+    });
   };
 
   const renderTagList = (tags: string[]) => {
@@ -366,6 +351,10 @@ export default function UserProfile() {
     ));
   };
 
+  const handleSearch = (term: string) => {
+    setSearchTerm(term.toLowerCase());
+  };
+
   const renderTabContent = () => {
     const sortBookmarks = (bookmarksToSort: Bookmark[]) => {
       return [...bookmarksToSort].sort((a, b) => {
@@ -377,11 +366,18 @@ export default function UserProfile() {
       });
     };
 
+    const filterBookmarks = (bookmarksToFilter: Bookmark[]) => {
+      return bookmarksToFilter.filter(bookmark => {
+        const searchContent = `${bookmark.title} ${bookmark.description} ${bookmark.tags.join(' ')}`.toLowerCase();
+        return searchContent.includes(searchTerm);
+      });
+    };
+
     switch (activeTab) {
       case 'bookmarks':
         return (
           <BookmarkList
-            bookmarks={sortBookmarks(bookmarks)}
+            bookmarks={sortBookmarks(filterBookmarks(bookmarks))}
             onRemove={handleDeleteBookmark}
             onToggleFavorite={handleToggleFavorite}
             onTogglePinned={isOwnProfile ? handleTogglePinned : undefined}
@@ -392,7 +388,7 @@ export default function UserProfile() {
       case 'favorites':
         return (
           <BookmarkList
-            bookmarks={sortBookmarks(favoriteBookmarks)}
+            bookmarks={sortBookmarks(filterBookmarks(favoriteBookmarks))}
             onRemove={handleDeleteBookmark}
             onToggleFavorite={handleToggleFavorite}
             onTogglePinned={isOwnProfile ? handleTogglePinned : undefined}
@@ -401,21 +397,27 @@ export default function UserProfile() {
           />
         );
       case 'comments':
-        const userComments = processBookmarksWithComments(bookmarksWithComments).flatMap(bookmark => 
-          (bookmark.comments || [])
-            .filter(comment => comment.username === username)
-            .map(comment => ({
-              ...comment,
-              bookmark: {
-                id: bookmark.id,
-                title: bookmark.title,
-                url: bookmark.url,
-                tags: bookmark.tags,
-                username: bookmark.username,
-                description: bookmark.description
-              }
-            }))
-        ).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        const userComments = processBookmarksWithComments(filterBookmarks(bookmarksWithComments))
+          .flatMap(bookmark => {
+            const comments = bookmark.comments || [];
+            return comments
+              .filter(comment => comment.username === username)
+              .map(comment => ({
+                ...comment,
+                bookmark: {
+                  id: bookmark.id,
+                  title: bookmark.title,
+                  url: bookmark.url,
+                  tags: bookmark.tags,
+                  username: bookmark.username,
+                  description: bookmark.description,
+                  isPublic: bookmark.isPublic
+                }
+              }));
+          })
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+        console.log('İşlenmiş yorumlar:', userComments);
 
         return (
           <div className="space-y-4">
@@ -423,48 +425,6 @@ export default function UserProfile() {
               userComments.map(comment => (
                 <div key={comment.id} className="bg-white rounded-lg shadow-sm border p-4">
                   <div className="flex flex-col space-y-3">
-                    {/* Yer İmi Bilgileri */}
-                    <div className="flex items-start space-x-3 pb-3 border-b border-gray-200">
-                      <div className="flex-shrink-0">
-                        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                        </svg>
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between">
-                          <Link
-                            href={comment.bookmark.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:text-blue-800 font-medium block truncate"
-                          >
-                            {comment.bookmark.title}
-                          </Link>
-                          <span className="text-sm text-gray-500">
-                            Added by:{' '}
-                            <Link href={`/users/${encodeURIComponent(comment.bookmark.username)}`} className="text-blue-600 hover:text-blue-800">
-                              {comment.bookmark.username}
-                            </Link>
-                          </span>
-                        </div>
-                        <a 
-                          href={comment.bookmark.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm text-gray-500 hover:text-gray-700 truncate block mt-1"
-                        >
-                          {comment.bookmark.url}
-                        </a>
-                        {/* Tagler */}
-                        {comment.bookmark.tags && comment.bookmark.tags.length > 0 && (
-                          <div className="flex flex-wrap gap-2 mt-2">
-                            {renderTagList(comment.bookmark.tags)}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Yorum İçeriği */}
                     <div className="flex items-start space-x-3">
                       <div className="flex-shrink-0">
                         <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
@@ -474,10 +434,26 @@ export default function UserProfile() {
                         </div>
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm text-gray-700">{comment.text}</div>
-                        <div className="mt-1 text-xs text-gray-500">
-                          {format(new Date(comment.createdAt), 'd MMMM yyyy, HH:mm')}
+                        <div className="flex items-center justify-between">
+                          <Link
+                            href={`/users/${encodeURIComponent(comment.username)}`}
+                            className="text-sm font-medium text-gray-900 hover:text-blue-600"
+                          >
+                            {comment.username}
+                          </Link>
+                          <span className="text-sm text-gray-500">
+                            {format(new Date(comment.createdAt), 'MMM d, yyyy')}
+                          </span>
                         </div>
+                        {comment.bookmark.isPublic && (
+                          <Link
+                            href={`/bookmark/${comment.bookmarkId}`}
+                            className="mt-1 text-blue-600 hover:text-blue-800 block"
+                          >
+                            {comment.bookmark.title}
+                          </Link>
+                        )}
+                        <p className="mt-1 text-sm text-gray-700">{comment.content}</p>
                       </div>
                     </div>
                   </div>
@@ -498,9 +474,9 @@ export default function UserProfile() {
                     d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
                   />
                 </svg>
-                <h3 className="mt-2 text-base font-medium text-gray-900">No comments yet</h3>
+                <h3 className="mt-2 text-base font-medium text-gray-900">Henüz yorum yok</h3>
                 <p className="mt-1 text-sm text-gray-500">
-                  This user hasn't made any comments yet.
+                  Bu kullanıcı henüz yorum yapmamış.
                 </p>
               </div>
             )}
@@ -511,15 +487,13 @@ export default function UserProfile() {
 
   return (
     <Layout>
-      {userProfile && !userProfile.isApproved && (
-        <div className="p-4 bg-yellow-100 text-yellow-900">
-          Hesabınız henüz onaylanmamış. Lütfen yönetici onayını bekleyin.
-        </div>
-      )}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           {/* Sağ Taraf - Tab İçeriği */}
           <div className="lg:col-span-3">
+            {/* Arama Alanı */}
+            <SearchBar onSearch={handleSearch} />
+            
             {/* Tab Başlıkları */}
             <div className="flex space-x-1 bg-gray-50 p-1 rounded-lg mb-6">
               <button
@@ -632,7 +606,7 @@ export default function UserProfile() {
                       >
                         <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 24 24">
                           <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.463 2 11.97c0 4.404 2.865 8.14 6.839 9.458.5.092.682-.216.682-.48 0-.236-.008-.864-.013-1.695-2.782.602-3.369-1.337-3.369-1.337-.454-1.151-1.11-1.458-1.11-1.458-.908-.618.069-.606.069-.606 1.003.07 1.531 1.027 1.531 1.027.892 1.524 2.341 1.084 2.91.828.092-.643.35-1.083.636-1.332-2.22-.251-4.555-1.107-4.555-4.927 0-1.088.39-1.979 1.029-2.675-.103-.252-.446-1.266.098-2.638 0 0 .84-.268 2.75 1.022A9.606 9.606 0 0112 6.82c.85.004 1.705.114 2.504.336 1.909-1.29 2.747-1.022 2.747-1.022.546 1.372.202 2.386.1 2.638.64.696 1.028 1.587 1.028 2.675 0 3.83-2.339 4.673-4.566 4.92.359.307.678.915.678 1.846 0 1.332-.012 2.407-.012 2.734 0 .267.18.577.688.48C19.137 20.107 22 16.373 22 11.969 22 6.463 17.522 2 12 2z"/>
-                      </svg>
+                        </svg>
                         GitHub
                       </a>
                     )}

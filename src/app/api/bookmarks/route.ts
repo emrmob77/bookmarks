@@ -196,22 +196,38 @@ export async function GET(req: NextRequest) {
         FROM bookmarks b
       `;
 
-      const queryParams: any[] = [session.user.id];
-      const whereConditions: string[] = [];
+      let queryParams: any[] = [session.user.id];
+      let whereConditions: string[] = [];
 
       // Favori sorgusu için JOIN'leri değiştir
       if (searchParams.get('favorites') === 'true') {
-        query = query.replace('FROM bookmarks b', `FROM bookmarks b INNER JOIN favorites f ON b.id = f.bookmark_id AND f.user_id = ?`);
-        queryParams.push(session.user.id);
+        query = `
+          SELECT 
+            b.*,
+            GROUP_CONCAT(DISTINCT t.name) as tags,
+            COUNT(DISTINCT f2.id) as favorite_count,
+            COUNT(DISTINCT c.id) as comment_count,
+            TRUE as is_favorited,
+            u.username
+          FROM bookmarks b
+          INNER JOIN favorites f ON b.id = f.bookmark_id AND f.user_id = ?
+          LEFT JOIN bookmark_tags bt ON b.id = bt.bookmark_id
+          LEFT JOIN tags t ON bt.tag_id = t.id
+          LEFT JOIN favorites f2 ON b.id = f2.bookmark_id
+          LEFT JOIN comments c ON b.id = c.bookmark_id
+          LEFT JOIN users u ON b.user_id = u.id
+        `;
+        queryParams = [session.user.id];
+        whereConditions = [];
+      } else {
+        query += `
+          LEFT JOIN bookmark_tags bt ON b.id = bt.bookmark_id
+          LEFT JOIN tags t ON bt.tag_id = t.id
+          LEFT JOIN favorites f2 ON b.id = f2.bookmark_id
+          LEFT JOIN comments c ON b.id = c.bookmark_id
+          LEFT JOIN users u ON b.user_id = u.id
+        `;
       }
-
-      query += `
-        LEFT JOIN bookmark_tags bt ON b.id = bt.bookmark_id
-        LEFT JOIN tags t ON bt.tag_id = t.id
-        LEFT JOIN favorites f2 ON b.id = f2.bookmark_id
-        LEFT JOIN comments c ON b.id = c.bookmark_id
-        LEFT JOIN users u ON b.user_id = u.id
-      `;
 
       if (userId) {
         whereConditions.push('b.user_id = ?');
@@ -255,24 +271,47 @@ export async function GET(req: NextRequest) {
       const userMap = new Map(users.map((u: any) => [u.id, u]));
 
       // Her bir bookmark için kullanıcı adını ekle ve arayüze uygun formata dönüştür
-      const formattedBookmarks = bookmarks.map((b: any) => ({
-        id: b.id,
-        url: b.url,
-        title: b.title,
-        description: b.description,
-        image: b.image_url,
-        tags: b.tags ? b.tags.split(',').filter(Boolean) : [],
-        isPublic: Boolean(b.is_public),
-        isPinned: Boolean(b.is_pinned),
-        isFavorite: Boolean(b.is_favorited),
-        favoriteCount: Number(b.favorite_count) || 0,
-        userId: b.user_id,
-        username: userMap.get(b.user_id)?.username || 'Unknown User',
-        createdAt: b.created_at.toISOString(),
-        updatedAt: b.updated_at?.toISOString(),
-        viewCount: Number(b.view_count) || 0,
-        commentCount: Number(b.comment_count) || 0,
-        comments: [] // Yorumları ayrı bir sorgu ile alabiliriz
+      const formattedBookmarks = await Promise.all(bookmarks.map(async (b: any) => {
+        // Yorumları getir
+        const [comments] = await connection.query(
+          `SELECT 
+            c.*,
+            u.username
+          FROM comments c
+          JOIN users u ON c.user_id = u.id
+          WHERE c.bookmark_id = ?
+          ORDER BY c.created_at DESC`,
+          [b.id]
+        ) as [any[], any];
+
+        const formattedComments = comments.map((comment: any) => ({
+          id: comment.id,
+          content: comment.content,
+          username: comment.username,
+          createdAt: comment.created_at.toISOString(),
+          updatedAt: comment.updated_at?.toISOString(),
+          bookmarkId: comment.bookmark_id
+        }));
+
+        return {
+          id: b.id,
+          url: b.url,
+          title: b.title,
+          description: b.description,
+          image: b.image_url,
+          tags: b.tags ? b.tags.split(',').filter(Boolean) : [],
+          isPublic: Boolean(b.is_public),
+          isPinned: Boolean(b.is_pinned),
+          isFavorite: Boolean(b.is_favorited),
+          favoriteCount: Number(b.favorite_count) || 0,
+          userId: b.user_id,
+          username: userMap.get(b.user_id)?.username || 'Unknown User',
+          createdAt: b.created_at.toISOString(),
+          updatedAt: b.updated_at?.toISOString(),
+          viewCount: Number(b.view_count) || 0,
+          commentCount: Number(b.comment_count) || 0,
+          comments: formattedComments
+        };
       }));
 
       // Toplam sayfa sayısını hesapla
