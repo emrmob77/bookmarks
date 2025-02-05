@@ -14,28 +14,54 @@ export default function TagPage() {
 
   // Load bookmarks from localStorage on mount
   useEffect(() => {
-    const loadedBookmarks = getBookmarks();
-    setBookmarks(loadedBookmarks);
+    const fetchBookmarks = async () => {
+      const loadedBookmarks = await getBookmarks();
+      setBookmarks(loadedBookmarks);
+    };
+    fetchBookmarks();
   }, []);
 
   const filteredBookmarks = bookmarks.filter(bookmark => 
     bookmark.tags.includes(name) && (bookmark.isPublic || bookmark.isOwner)
   );
 
-  const handleRemoveBookmark = (id: string) => {
+  const handleRemoveBookmark = async (id: string) => {
     const updatedBookmarks = bookmarks.filter(b => b.id !== id);
     setBookmarks(updatedBookmarks);
-    saveBookmarks(updatedBookmarks);
+    await saveBookmarks(updatedBookmarks);
   };
 
-  const handleToggleFavorite = (id: string) => {
+  const handleToggleFavorite = async (id: string) => {
     const updatedBookmarks = bookmarks.map(bookmark =>
       bookmark.id === id
         ? { ...bookmark, isFavorite: !bookmark.isFavorite }
         : bookmark
     );
     setBookmarks(updatedBookmarks);
-    saveBookmarks(updatedBookmarks);
+    await saveBookmarks(updatedBookmarks);
+  };
+
+  const handleAddComment = async (bookmarkId: string, commentText: string) => {
+    const updatedBookmarks = bookmarks.map(bookmark =>
+      bookmark.id === bookmarkId
+        ? {
+            ...bookmark,
+            comments: [
+              ...(bookmark.comments || []),
+              {
+                id: Date.now().toString(),
+                userId: 'current-user',
+                username: 'current-user',
+                text: commentText,
+                createdAt: new Date().toISOString(),
+                bookmarkId
+              }
+            ]
+          }
+        : bookmark
+    );
+    setBookmarks(updatedBookmarks);
+    await saveBookmarks(updatedBookmarks);
   };
 
   return (
@@ -58,6 +84,7 @@ export default function TagPage() {
                   bookmarks={filteredBookmarks}
                   onRemove={handleRemoveBookmark}
                   onToggleFavorite={handleToggleFavorite}
+                  onAddComment={handleAddComment}
                   onTagClick={(tag) => {
                     window.location.href = `/tags/${encodeURIComponent(tag)}`;
                   }}

@@ -1,303 +1,54 @@
 [
   {
-    "title": "Google Search Console Nedir, Kurulumu Nasıl Yapılır? | Mobitek",
-    "url": "https://mobitek.com/google-search-console-nedir-kurulumu-nasil-yapilir/",
-    "description": "Google Search Console arama sonuçlarında ortaya çıkan performansı izlemeye yarayan bir araçtır. Detaylarını öğrenmek için hemen tıklayın!",
-    "image": "",
-    "tags": [
-      "seo",
-      "sem",
-      "de",
-      "en"
-    ],
-    "isPublic": true,
-    "isPinned": true,
-    "isFavorite": true,
-    "favoriteCount": 1,
-    "comments": [],
-    "id": "1738431021024",
-    "userId": "1",
-    "username": "admin",
-    "createdAt": "2025-02-01T17:30:21.024Z",
-    "isOwner": false
-  },
-  {
-    "title": "Referanslarımız - Mobitek",
-    "url": "https://mobitek.com/referanslarimiz/",
-    "description": "REFERANSLARIMIZ",
-    "image": "https://mobitek.com/wp-content/uploads/2024/03/kumtel-logo.png",
-    "tags": [
-      "seo",
-      "sem"
-    ],
-    "isPublic": true,
-    "isPinned": false,
-    "isFavorite": false,
-    "favoriteCount": 0,
-    "comments": [
-      {
-        "id": "1738430448693",
-        "text": "Harikaa",
-        "userId": "1",
-        "username": "admin",
-        "bookmarkId": "1738429316494",
-        "createdAt": "2025-02-01T17:20:48.693Z"
-      }
-    ],
-    "id": "1738429316494",
-    "userId": "1",
-    "username": "admin",
-    "createdAt": "2025-02-01T17:01:56.494Z",
-    "isOwner": true
-  },
-  {
-    "title": "Google Search Console Nedir, Kurulumu Nasıl Yapılır? | Mobitek",
-    "url": "https://mobitek.com/google-search-console-nedir-kurulumu-nasil-yapilir/",
-    "description": "Google Search Console arama sonuçlarında ortaya çıkan performansı izlemeye yarayan bir araçtır. Detaylarını öğrenmek için hemen tıklayın!",
-    "image": "https://mobitek.com/wp-content/uploads/2021/07/google-search-console-nedir.webp",
-    "tags": [
-      "gg"
-    ],
-    "isPublic": true,
-    "isPinned": false,
-    "isFavorite": false,
-    "favoriteCount": 0,
-    "comments": [],
-    "id": "1738428953241",
-    "userId": "1",
-    "username": "admin",
-    "createdAt": "2025-02-01T16:55:53.241Z",
-    "isOwner": true
-  },
-  {
-    "title": "SEO Nedir ve Nasıl Yapılır? - Mobitek",
-    "url": "https://mobitek.com/seo",
-    "description": "SEO, daha fazla gelir ve trafik etmek amacıyla, web sitelerinin organik arama sonuçlarında görünürlüğünü arttırmak için yapılan çalışmaların tümüdür.",
-    "image": "https://mobitek.com/wp-content/uploads/2024/10/favicon-150x150.png",
-    "tags": [
-      "sds"
-    ],
-    "isPublic": true,
-    "isPinned": false,
-    "isFavorite": false,
-    "favoriteCount": 0,
-    "comments": [],
-    "id": "1738428924491",
-    "userId": "1",
-    "username": "admin",
-    "createdAt": "2025-02-01T16:55:24.491Z",
-    "isOwner": true
-  },
-  {
-    "title": "Referanslarımız - Mobitek",
-    "url": "https://mobitek.com/referanslarimiz/",
-    "description": "REFERANSLARIMIZ",
-    "image": "https://mobitek.com/wp-content/uploads/2024/03/kumtel-logo.png",
-    "tags": [
-      "ss"
-    ],
-    "isPublic": true,
-    "isPinned": false,
-    "isFavorite": false,
-    "favoriteCount": 0,
-    "comments": [],
-    "id": "1738428913521",
-    "userId": "1",
-    "username": "admin",
-    "createdAt": "2025-02-01T16:55:13.521Z",
-    "isOwner": true
-  },
-  {
-    "title": "Google Ads - Google Search ve Diğer Reklam Modelleri - Mobitek",
-    "url": "https://mobitek.com/sem/",
-    "description": "Google Ads Reklamları kategorisinde bulunan güncel yazıları bu sayfa üzerinden takip edebilirsiniz.",
-    "image": "https://mobitek.com/wp-content/uploads/2024/10/favicon-150x150.png",
-    "tags": [
-      "sem"
-    ],
-    "isPublic": true,
-    "isPinned": false,
-    "isFavorite": false,
-    "favoriteCount": 0,
-    "comments": [],
-    "id": "1738428864165",
-    "userId": "1",
-    "username": "admin",
-    "createdAt": "2025-02-01T16:54:24.165Z",
-    "isOwner": true
-  },
-  {
-    "title": "Özel Rehber: Haber ve Özel Hazırlanmış Rehberler",
-    "url": "https://www.ozelrehber.com/",
+    "id": "15330129-7ab4-4640-a944-093a0fb7c637",
+    "url": "https://ozelrehber.com",
+    "title": "Özel Rehbear: Haber ve Özel Hazırlanmış Rehberler",
     "description": "Özel rehber web sitesi haber odaklı içerikleri ve özel hazırlanmış, gezi, ekonomi, e-devlet vb. gibi içerikleri yayında!",
-    "image": "https://i0.wp.com/www.ozelrehber.com/wp-content/uploads/2024/02/favicon-32x32-1.png?fit=32%2C32&ssl=1",
+    "image": null,
     "tags": [
-      "ozel"
+      "sem",
+      "seo1"
     ],
     "isPublic": true,
     "isPinned": false,
     "isFavorite": false,
     "favoriteCount": 0,
-    "comments": [],
-    "id": "1738428843965",
-    "userId": "1",
-    "username": "admin",
-    "createdAt": "2025-02-01T16:54:03.965Z",
-    "isOwner": true
+    "userId": "8841e333-4baf-49d7-822f-8aa970c9e97c",
+    "username": "emrmob7",
+    "createdAt": "2025-02-05T13:58:00.000Z",
+    "updatedAt": "2025-02-05T15:53:26.000Z",
+    "viewCount": 0,
+    "commentCount": 0,
+    "comments": [
+      {
+        "id": "s6gc3djuw",
+        "userId": "8841e333-4baf-49d7-822f-8aa970c9e97c",
+        "username": "emrmob7",
+        "text": "merhaba",
+        "bookmarkId": "15330129-7ab4-4640-a944-093a0fb7c637",
+        "createdAt": "2025-02-05T16:13:58.655Z"
+      }
+    ]
   },
   {
-    "title": "Xasdasdsad",
-    "url": "https://x.com/home",
-    "description": "adsadsadasdasd",
-    "image": "",
+    "id": "7fa01fd7-be7a-4adb-8f91-dc154c9be832",
+    "url": "https://seoroas.com",
+    "title": "SEOROAS: Organik Büyüme Ajansı",
+    "description": "SEOROAS: Organik büyüme ajansı olarak hizmet vermektedir. SEO'nun yanı sıra dijital pazarlama kanallarının tamamında aktif rol alır.",
+    "image": null,
     "tags": [
-      "x"
+      "seo"
     ],
     "isPublic": true,
     "isPinned": false,
     "isFavorite": false,
     "favoriteCount": 0,
-    "comments": [],
-    "id": "1738424628763",
-    "userId": "1",
-    "username": "admin",
-    "createdAt": "2025-02-01T15:43:48.763Z",
-    "updatedAt": "2025-02-01T15:43:48.763Z",
-    "isOwner": false
-  },
-  {
-    "title": "Google Ads - Mobitek",
-    "url": "https://mobitek.com/en/google-ads-ads/",
-    "description": "Google Ads You can follow the current articles in the category on this page.",
-    "tags": [
-      "test",
-      "test2",
-      "test3"
-    ],
-    "isPublic": false,
-    "id": "1738424240473",
-    "userId": "1",
-    "username": "admin",
-    "createdAt": "2025-02-01T15:37:20.473Z",
-    "updatedAt": "2025-02-01T15:37:20.473Z",
-    "isOwner": false,
-    "isFavorite": false,
-    "isPinned": false,
-    "comments": [],
-    "favoriteCount": 0
-  },
-  {
-    "title": "Kanal Tedavisi (Endodonti) Nedir ve Nasıl Yapılır?",
-    "url": "https://elcinkeskinozyer.com.tr/kanal-tedavisi/",
-    "description": "Kanal Tedavisi için Ataşehir'de ağrısız ve etkili çözümler sunuyoruz. İlk muayeneniz ücretsiz! Detaylar ve randevu için elcinkeskinozyer.com.tr'ye tıklayın!",
-    "tags": [
-      "dis"
-    ],
-    "isPublic": true,
-    "id": "1738424112826",
-    "userId": "1",
-    "username": "admin",
-    "createdAt": "2025-02-01T15:35:12.826Z",
-    "updatedAt": "2025-02-01T15:35:12.826Z",
-    "favorites": 0,
-    "comments": [],
-    "isOwner": true,
-    "isFavorite": false,
-    "isPinned": false,
-    "favoriteCount": 0
-  },
-  {
-    "url": "https://mobitek.com/seo-ajansi/",
-    "title": "SEO Ajansı - En İyi SEO Ajansı ile Organik Trafiğinizi Artırın",
-    "description": "Mobitek, en iyi SEO ajansı olarak organik trafiğinizi artırır ve dijital görünürlüğünüzü yükseltir. Uzman ekibimizle gelirinizi artırın.",
-    "image": "https://mobitek.com/wp-content/uploads/2024/09/Seo-Ajansi-Nedir.webp",
-    "tags": [
-      "saats"
-    ],
-    "isPublic": false,
-    "userId": "admin@example.com",
-    "favoriteCount": 1,
-    "id": "1738404792108",
-    "createdAt": "2025-02-01T10:13:12.108Z",
-    "isOwner": false,
-    "isFavorite": false,
-    "isPinned": false,
-    "username": "admin",
-    "comments": [
-      {
-        "id": "1738405229133",
-        "userId": "1",
-        "username": "admin",
-        "text": "ya çalışmoyor",
-        "bookmarkId": "1738404792108",
-        "createdAt": "2025-02-01T10:20:29.133Z"
-      }
-    ],
-    "updatedAt": "2025-02-01T15:26:44.919Z"
-  },
-  {
-    "url": "https://www.saatvesaat.com.tr/",
-    "title": "Saat, Saat Modelleri ve Markaları - Saat ve Saat",
-    "description": "Saat ve Saat A.Ş nin Türkiye Distribütörlüğünü yaptığı saat markaları, takı ve aksesuar modellerini bulabileceğiniz resmi alışveriş sitesidir.",
-    "image": "https://www.saatvesaat.com.tr/media/favicon/websites/1/favicon.png",
-    "tags": [
-      "test",
-      "test2"
-    ],
-    "isPublic": true,
-    "userId": "admin@example.com",
-    "favoriteCount": 1,
-    "id": "1738404782347",
-    "createdAt": "2025-02-01T10:13:02.347Z",
-    "isOwner": true,
-    "isFavorite": false,
-    "isPinned": false,
-    "username": "admin",
-    "comments": [
-      {
-        "id": "1738417707937",
-        "text": "harika",
-        "userId": "1738060796426",
-        "username": "emrmob7",
-        "bookmarkId": "1738404782347",
-        "createdAt": "2025-02-01T13:48:27.937Z"
-      }
-    ]
-  },
-  {
-    "url": "https://github.com/",
-    "title": "GitHub · Build and ship software on a single, collaborative platform · GitHub ",
-    "description": "GitHub is where people build software. More than 150 million people use GitHub to discover, fork, and contribute to over 420 million projects.",
-    "image": "https://github.githubassets.com/assets/home24-5939032587c9.jpg",
-    "tags": [
-      "git"
-    ],
-    "isPublic": true,
-    "userId": "admin@example.com",
-    "favoriteCount": 1,
-    "id": "1738404715290",
-    "createdAt": "2025-02-01T10:11:55.290Z",
-    "isOwner": true,
-    "isFavorite": false,
-    "isPinned": false,
-    "username": "admin",
-    "comments": [
-      {
-        "id": "1738417713597",
-        "text": "güzel",
-        "userId": "1738060796426",
-        "username": "emrmob7",
-        "bookmarkId": "1738404715290",
-        "createdAt": "2025-02-01T13:48:33.597Z"
-      },
-      {
-        "id": "1738432677221",
-        "text": "nice pbor",
-        "userId": "1",
-        "username": "admin",
-        "bookmarkId": "1738404715290",
-        "createdAt": "2025-02-01T17:57:57.221Z"
-      }
-    ]
+    "userId": "8841e333-4baf-49d7-822f-8aa970c9e97c",
+    "username": "emrmob7",
+    "createdAt": "2025-02-05T13:57:44.000Z",
+    "updatedAt": "2025-02-05T13:57:44.000Z",
+    "viewCount": 0,
+    "commentCount": 0,
+    "comments": []
   }
 ]

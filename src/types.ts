@@ -2,12 +2,16 @@ export interface User {
   id: string;
   email: string;
   username: string;
+  role?: 'admin' | 'user';
   isAdmin?: boolean;
   createdAt: string;
+  updatedAt: string;
   bio?: string;
   website?: string;
   twitter?: string;
   github?: string;
+  avatar?: string;
+  settings?: UserSettings;
 }
 
 export interface BaseComment {
@@ -34,19 +38,20 @@ export interface BookmarkComment extends BaseComment {
 
 export interface Bookmark {
   id: string;
-  userId: string;
-  username: string;
-  title: string;
   url: string;
+  title: string;
   description?: string;
   tags: string[];
   isPublic: boolean;
+  userId: string;
+  username: string;
+  createdAt: string;
+  updatedAt?: string;
+  comments?: Comment[];
+  favoriteCount?: number;
   isPinned?: boolean;
   isFavorite?: boolean;
   isOwner?: boolean;
-  favoriteCount?: number;
-  comments?: Comment[];
-  createdAt: string;
 }
 
 export interface Tag {
@@ -73,4 +78,21 @@ export interface BookmarkMetadata {
   error?: string;
 }
 
-export type NewBookmark = Omit<Bookmark, 'id' | 'comments' | 'favoriteCount' | 'isPinned' | 'isFavorite' | 'isOwner' | 'createdAt'>; 
+export interface UserSettings {
+  theme?: 'light' | 'dark';
+  language?: string;
+  emailNotifications?: boolean;
+  isApproved?: boolean;
+  isPremium?: boolean;
+  isPublic?: boolean;
+  maxBookmarks?: number;
+}
+
+export interface UserFavorite {
+  bookmarkId: string;
+  userId: string;
+  createdAt: string;
+  bookmarkData: Bookmark;
+}
+
+export type NewBookmark = Omit<Bookmark, 'id' | 'comments' | 'favoriteCount' | 'isPinned' | 'isFavorite' | 'isOwner' | 'createdAt'>;

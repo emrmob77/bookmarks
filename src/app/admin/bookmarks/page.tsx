@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Bookmark } from '@/types';
 import { useRouter } from 'next/navigation';
+import { getBookmarks, deleteBookmark, updateBookmark } from '@/lib/storage';
 
 export default function AdminBookmarks() {
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
@@ -12,10 +13,10 @@ export default function AdminBookmarks() {
   const router = useRouter();
 
   useEffect(() => {
-    const loadBookmarks = () => {
+    const loadBookmarks = async () => {
       try {
-        const storedBookmarks = JSON.parse(localStorage.getItem('bookmarks') || '[]');
-        setBookmarks(storedBookmarks);
+        const bookmarksData = await getBookmarks();
+        setBookmarks(bookmarksData);
       } catch (error) {
         console.error('Error loading bookmarks:', error);
       }
@@ -35,29 +36,33 @@ export default function AdminBookmarks() {
     if (!selectedBookmark) return;
 
     try {
-      const updatedBookmarks = bookmarks.map(bookmark => 
-        bookmark.id === selectedBookmark.id ? { ...bookmark, ...formData } : bookmark
+      const updatedBookmark = { ...selectedBookmark, ...formData };
+      await updateBookmark(updatedBookmark);
+      
+      setBookmarks(prevBookmarks =>
+        prevBookmarks.map(bookmark =>
+          bookmark.id === selectedBookmark.id ? updatedBookmark : bookmark
+        )
       );
-
-      localStorage.setItem('bookmarks', JSON.stringify(updatedBookmarks));
-      setBookmarks(updatedBookmarks);
+      
       setIsEditing(false);
       setSelectedBookmark(null);
       setFormData({});
       router.refresh();
     } catch (error) {
       console.error('Error updating bookmark:', error);
+      alert('Yer imi güncellenirken bir hata oluştu');
     }
   };
 
   const handleDelete = async (bookmarkId: string) => {
     try {
-      const updatedBookmarks = bookmarks.filter(bookmark => bookmark.id !== bookmarkId);
-      localStorage.setItem('bookmarks', JSON.stringify(updatedBookmarks));
-      setBookmarks(updatedBookmarks);
+      await deleteBookmark(bookmarkId);
+      setBookmarks(prevBookmarks => prevBookmarks.filter(bookmark => bookmark.id !== bookmarkId));
       router.refresh();
     } catch (error) {
       console.error('Error deleting bookmark:', error);
+      alert('Yer imi silinirken bir hata oluştu');
     }
   };
 

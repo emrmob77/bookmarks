@@ -1,7 +1,8 @@
 'use client';
 
-import { useAuth } from '@/contexts/AuthContext';
-import { redirect } from 'next/navigation';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { useState } from 'react';
 
@@ -10,12 +11,29 @@ export default function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { user } = useAuth();
+  const router = useRouter();
+  const { data: session, status } = useSession();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
-  // Admin yetkisi kontrolü
-  if (!user?.isAdmin) {
-    redirect('/');
+  useEffect(() => {
+    if (status === 'loading') return;
+
+    if (!session?.user?.isAdmin) {
+      console.log('Not admin, redirecting...', session?.user);
+      router.push('/');
+    }
+  }, [status, session, router]);
+
+  if (status === 'loading') {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
+
+  if (!session?.user?.isAdmin) {
+    return null;
   }
 
   const menuItems = [
@@ -124,4 +142,4 @@ export default function AdminLayout({
       </div>
     </div>
   );
-} 
+}

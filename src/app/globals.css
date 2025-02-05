@@ -1,17 +1,21 @@
+/* Tailwind directives */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* Custom variables */
 :root {
   --foreground-rgb: 0, 0, 0;
   --background-rgb: 249, 250, 251;
 }
 
+/* Global styles */
 body {
   color: rgb(var(--foreground-rgb));
   background: rgb(var(--background-rgb));
 }
 
+/* Custom utilities */
 @layer utilities {
   .line-clamp-2 {
     display: -webkit-box;

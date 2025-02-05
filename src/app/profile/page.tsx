@@ -3,18 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import Link from 'next/link';
-
-interface Bookmark {
-  id: string;
-  url: string;
-  title: string;
-  description: string;
-  image: string;
-  tags: string[];
-  isPublic: boolean;
-  createdAt: string;
-  userId: string;
-}
+import { User, Bookmark } from '@/types';
 
 export default function Profile() {
   const { user } = useAuth();
@@ -66,7 +55,7 @@ export default function Profile() {
           <div className="border-t border-gray-200">
             <dl>
               <div className="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                <dt className="text-sm font-medium text-gray-500">Kullanıcı adı</dt>
+                <dt className="text-sm font-medium text-gray-500">Username</dt>
                 <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{user.username}</dd>
               </div>
               <div className="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
@@ -76,7 +65,7 @@ export default function Profile() {
               <div className="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
                 <dt className="text-sm font-medium text-gray-500">Kayıt tarihi</dt>
                 <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-                  {new Date(user.createdAt).toLocaleDateString('tr-TR')}
+                  {new Date(user.createdAt).toLocaleDateString('tr-TR', { year: 'numeric', month: 'long', day: 'numeric' })}
                 </dd>
               </div>
             </dl>
@@ -160,4 +149,4 @@ export default function Profile() {
       </div>
     </div>
   );
-} 
+}

@@ -2,13 +2,13 @@ export interface User {
   id: string;
   email: string;
   username: string;
+  role: 'user' | 'admin';
+  isAdmin?: boolean;
   bio?: string;
   website?: string;
   twitter?: string;
   github?: string;
   createdAt: string;
-  isAdmin?: boolean;
-  role: 'user' | 'admin';
   settings?: {
     isApproved?: boolean;
     isPremium?: boolean;
@@ -21,22 +21,29 @@ export interface Bookmark {
   url: string;
   title: string;
   description?: string;
-  image: string;
+  image?: string;
   tags: string[];
   isPublic: boolean;
-  isPinned?: boolean;
-  isFavorite?: boolean;
-  favoriteCount?: number;
+  isPinned: boolean;
+  isFavorite: boolean;
+  favoriteCount: number;
   userId: string;
   username: string;
   createdAt: string;
-  comments?: Array<{
-    id: string;
-    text: string;
-    userId: string;
-    username: string;
-    createdAt: string;
-  }>;
+  updatedAt?: string;
+  viewCount?: number;
+  commentCount?: number;
+  comments?: Comment[];
+}
+
+export interface Comment {
+  id: string;
+  content: string;
+  userId: string;
+  username: string;
+  bookmarkId: string;
+  createdAt: string;
+  updatedAt?: string;
 }
 
 export interface BookmarkMetadata {
@@ -56,25 +63,12 @@ export interface Tag {
 }
 
 export interface NewBookmark {
-  id?: string;
-  title: string;
   url: string;
+  title: string;
   description?: string;
   image?: string;
-  tags: string[];
+  tags?: string[];
   isPublic: boolean;
-  isPinned?: boolean;
-  isFavorite?: boolean;
-  favoriteCount?: number;
-  userId?: string;
-  username?: string;
-  createdAt?: string;
-  updatedAt?: string;
-  comments?: Array<{
-    id: string;
-    text: string;
-    userId: string;
-    username: string;
-    createdAt: string;
-  }>;
-} 
+  userId: string;
+  username: string;
+}

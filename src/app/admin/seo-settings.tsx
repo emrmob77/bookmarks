@@ -12,7 +12,7 @@ export default function SeoSettings() {
   const router = useRouter();
 
   useEffect(() => {
-    if (!user?.role === 'admin') {
+    if (user?.role !== 'admin') {
       router.push('/');
       return;
     }
@@ -55,7 +55,7 @@ export default function SeoSettings() {
     }
   };
 
-  if (!user?.role === 'admin') {
+  if (user?.role !== 'admin') {
     return null;
   }
 

@@ -1,43 +1,31 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs';
-import path from 'path';
+import { getBookmarks } from '@/lib/storage';
 
-const DATA_DIR = path.join(process.cwd(), 'data');
-
-export async function GET(request: Request) {
+export async function GET() {
   try {
-    const filePath = path.join(DATA_DIR, 'bookmarks.json');
-    if (!fs.existsSync(filePath)) {
-      return new NextResponse('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>', {
-        headers: { 'Content-Type': 'application/xml' },
-      });
-    }
-
-    const data = fs.readFileSync(filePath, 'utf-8');
-    const bookmarks = JSON.parse(data).filter((bookmark: any) => bookmark.isPublic);
+    const bookmarks = await getBookmarks();
     const tags = new Set<string>();
-    
-    bookmarks.forEach((bookmark: any) => {
-      bookmark.tags.forEach((tag: string) => tags.add(tag));
+
+    // Tüm public bookmarkların taglerini topla
+    bookmarks.forEach(bookmark => {
+      if (bookmark.isPublic && bookmark.tags) {
+        bookmark.tags.forEach(tag => tags.add(tag));
+      }
     });
-    
-    let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
-    xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
-    
-    Array.from(tags).forEach(tag => {
-      xml += `  <url>\n`;
-      xml += `    <loc>${new URL(request.url).origin}/tags/${encodeURIComponent(tag)}</loc>\n`;
-      xml += `    <changefreq>daily</changefreq>\n`;
-      xml += `    <priority>0.6</priority>\n`;
-      xml += `  </url>\n`;
-    });
-    
-    xml += '</urlset>';
-    
-    return new NextResponse(xml, {
-      headers: {
-        'Content-Type': 'application/xml',
-      },
+
+    const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  ${Array.from(tags).map(tag => `
+    <url>
+      <loc>${process.env.NEXT_PUBLIC_BASE_URL}/tags/${encodeURIComponent(tag)}</loc>
+      <changefreq>daily</changefreq>
+      <priority>0.7</priority>
+    </url>
+  `).join('')}
+</urlset>`;
+
+    return new NextResponse(sitemap, {
+      headers: { 'Content-Type': 'application/xml' },
     });
   } catch (error) {
     console.error('Etiketler site haritası oluşturulurken hata:', error);
@@ -47,4 +35,4 @@ export async function GET(request: Request) {
       },
     });
   }
-} 
+}

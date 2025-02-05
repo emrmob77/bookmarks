@@ -1,25 +1,39 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import * as cheerio from 'cheerio';
 
 interface MetadataResponse {
   title: string;
   description: string;
   image: string;
+  error?: string;
 }
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const url = searchParams.get('url');
-
-  if (!url) {
-    return NextResponse.json({ error: 'URL is required' }, { status: 400 });
-  }
-
+export async function POST(req: NextRequest) {
   try {
+    const body = await req.json();
+    let { url } = body;
+
+    if (!url) {
+      return NextResponse.json({ error: 'URL is required' }, { status: 400 });
+    }
+
+    // URL'yi normalize et
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      url = `https://${url}`;
+    }
+
+    // URL'nin geçerli olup olmadığını kontrol et
+    try {
+      new URL(url);
+    } catch (e) {
+      return NextResponse.json({ error: 'Invalid URL format' }, { status: 400 });
+    }
+
     const response = await fetch(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (compatible; BookmarksBot/1.0; +http://example.com)'
-      }
+      },
+      signal: AbortSignal.timeout(10000) // 10 saniye timeout
     });
 
     if (!response.ok) {
@@ -58,8 +72,11 @@ export async function GET(request: Request) {
       }
     }
 
+    // Eğer title boşsa, domain adını kullan
+    const finalTitle = cleanTitle || new URL(url).hostname;
+
     const metadata: MetadataResponse = {
-      title: cleanTitle,
+      title: finalTitle,
       description: cleanDescription,
       image: cleanImage,
     };

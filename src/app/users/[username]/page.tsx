@@ -3,12 +3,12 @@
 import { useParams } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import Layout from '@/components/Layout';
-import BookmarkList from '@/components/BookmarkList';
-import { Bookmark } from '@/types';
-import { getBookmarks, saveBookmarks } from '@/lib/storage';
+import { getBookmarks, deleteBookmark, updateBookmark, saveBookmarks, getUserProfile, toggleFavorite } from '@/lib/storage';
 import Link from 'next/link';
 import { format } from 'date-fns';
 import { useAuth } from '@/contexts/AuthContext';
+import BookmarkList from '@/components/BookmarkList';
+import { Bookmark } from '@/types';
 
 type TabType = 'bookmarks' | 'favorites' | 'comments';
 
@@ -19,6 +19,16 @@ interface UserProfile {
   website?: string;
   twitter?: string;
   github?: string;
+  createdAt: string;
+  isApproved?: boolean;
+}
+
+interface Comment {
+  id: string;
+  userId: string;
+  username: string;
+  text: string;
+  bookmarkId: string;
   createdAt: string;
 }
 
@@ -45,7 +55,7 @@ export default function UserProfile() {
   // Kullanıcının kendi profilinde olup olmadığını kontrol et
   const isOwnProfile = user && user.username === username;
 
-  const getUserFavorites = () => {
+  const getUserFavorites = async () => {
     try {
       // Profil sayfasındaki kullanıcının ID'sini bul
       const usersData = localStorage.getItem('users');
@@ -62,7 +72,7 @@ export default function UserProfile() {
       const userFavorites = JSON.parse(storedFavorites);
 
       // Tüm bookmarkları al
-      const allBookmarks = getBookmarks();
+      const allBookmarks = await getBookmarks();
 
       // Tüm kullanıcıların favorilerini topla
       const allFavorites: any[] = [];
@@ -79,7 +89,7 @@ export default function UserProfile() {
 
       // Favori bookmarkları işaretle ve döndür
       const favoriteBookmarks = userFavorites.map((fav: any) => {
-        const bookmark = allBookmarks.find(b => b.id === fav.bookmarkId);
+        const bookmark = allBookmarks.find((b: Bookmark) => b.id === fav.bookmarkId);
         if (!bookmark) return null;
 
         return {
@@ -117,7 +127,7 @@ export default function UserProfile() {
     localStorage.setItem('users', JSON.stringify(allUsers));
   };
 
-  const loadData = () => {
+  const loadData = async () => {
     updateUserRecord();
 
     // Tüm kullanıcıları al
@@ -136,7 +146,7 @@ export default function UserProfile() {
     setUserProfile(profile || null);
 
     // Tüm yer imlerini al
-    const allBookmarks = getBookmarks();
+    const allBookmarks = await getBookmarks();
     
     // Kullanıcının kendi yer imleri
     const userBookmarks = allBookmarks.filter(b => b.username === username && (b.isPublic || isOwnProfile));
@@ -188,125 +198,107 @@ export default function UserProfile() {
     // After obtaining the profile from local storage
     if (profile) {
       // Update profile with social media fields from authUser if missing
-      profile.website = profile.website || user?.website;
-      profile.twitter = profile.twitter || user?.twitter;
-      profile.github = profile.github || user?.github;
-      profile.bio = profile.bio || user?.bio;
+      profile.website = profile.website || profileUserId?.website;
+      profile.twitter = profile.twitter || profileUserId?.twitter;
+      profile.github = profile.github || profileUserId?.github;
+      profile.bio = profile.bio || profileUserId?.bio;
     }
   };
 
   useEffect(() => {
-    let isMounted = true;
-
-    const loadDataAsync = async () => {
+    const loadUserProfile = async () => {
+      setIsLoading(true);
+      setError(null);
       try {
-        if (isMounted) {
-          await loadData();
-          // Favorileri güncelle
-          const favorites = getUserFavorites();
-          setFavoriteBookmarks(favorites);
-        }
-      } catch (error) {
-        console.error('Veri yükleme hatası:', error);
-        if (isMounted) {
-          setError('Veriler yüklenirken bir hata oluştu');
-        }
+        const { profile, stats } = await getUserProfile(username);
+        setUserProfile(profile);
+        setUserStats({
+          totalBookmarks: stats.totalBookmarks,
+          publicBookmarks: stats.publicBookmarks,
+          privateBookmarks: stats.privateBookmarks,
+          favorites: stats.favorites,
+          totalComments: stats.totalComments,
+          joinedAt: format(new Date(profile.createdAt), 'dd MMM yyyy')
+        });
+
+        // Kullanıcının bookmarklarını getir
+        const allBookmarks = await getBookmarks();
+        const userBookmarks = allBookmarks.filter((b: Bookmark) => 
+          b.username === username && (b.isPublic || isOwnProfile)
+        );
+        setBookmarks(userBookmarks);
+
+        // Kullanıcının favorilerini getir
+        const favorites = await getUserFavorites();
+        setFavoriteBookmarks(favorites);
+
+        // Kullanıcının yorumlu bookmarklarını getir
+        const bookmarksWithComments = userBookmarks.filter((b: Bookmark) => b.comments && b.comments.length > 0);
+        setBookmarksWithComments(bookmarksWithComments);
+      } catch (err: any) {
+        setError(err.message);
+        console.error('Profil yüklenirken hata:', err);
+      } finally {
+        setIsLoading(false);
       }
     };
 
-    loadDataAsync();
+    if (username) {
+      loadUserProfile();
+    }
+  }, [username, isOwnProfile]);
 
-    return () => {
-      isMounted = false;
-    };
-  }, [username, user, isOwnProfile]);
+  const handleDeleteBookmark = async (bookmarkId: string) => {
+    if (!user) {
+      alert('Bu işlemi yapabilmek için giriş yapmalısınız!');
+      return;
+    }
 
-  const handleRemoveBookmark = (id: string) => {
-    const updatedBookmarks = bookmarks.filter(b => b.id !== id);
-    setBookmarks(updatedBookmarks);
-    saveBookmarks(updatedBookmarks);
+    // Silme işlemini onayla
+    if (!confirm('Bu yer imini silmek istediğinizden emin misiniz?')) {
+      return;
+    }
+
+    try {
+      await deleteBookmark(bookmarkId);
+      
+      // State'i güncelle
+      setBookmarks(prevBookmarks => prevBookmarks.filter(b => b.id !== bookmarkId));
+      setFavoriteBookmarks(prevFavorites => prevFavorites.filter(b => b.id !== bookmarkId));
+      setBookmarksWithComments(prevComments => prevComments.filter(b => b.id !== bookmarkId));
+      
+      // Başarı mesajı göster
+      alert('Yer imi başarıyla silindi!');
+    } catch (error) {
+      console.error('Yer imi silinirken hata:', error);
+      alert('Yer imi silinirken bir hata oluştu');
+    }
   };
 
-  const handleToggleFavorite = async (id: string) => {
+  const handleToggleFavorite = async (bookmarkId: string) => {
     if (!user) return;
     
     try {
       setIsLoading(true);
       setError(null);
       
-      // Tüm bookmarkları al
-      const allBookmarks = getBookmarks();
-      const targetBookmark = allBookmarks.find(b => b.id === id);
+      const result = await toggleFavorite(bookmarkId);
       
-      if (!targetBookmark) {
-        throw new Error('Bookmark bulunamadı');
-      }
-
-      // Kullanıcının favorilerini al
-      const userFavoritesKey = `userFavorites_${user.id}`;
-      let userFavorites = [];
-      try {
-        userFavorites = JSON.parse(localStorage.getItem(userFavoritesKey) || '[]');
-      } catch (error) {
-        console.error('Favori verisi parse edilemedi:', error);
-        throw new Error('Favori verisi yüklenemedi');
-      }
-
-      const isFavorited = userFavorites.some((fav: any) => fav.bookmarkId === id);
-      let newFavorites;
-      
-      if (isFavorited) {
-        newFavorites = userFavorites.filter((fav: any) => fav.bookmarkId !== id);
-      } else {
-        const newFavorite = {
-          bookmarkId: id,
-          userId: user.id,
-          createdAt: new Date().toISOString()
-        };
-        newFavorites = [...userFavorites, newFavorite];
-      }
-
-      // Local storage'ı güncelle
-      localStorage.setItem(userFavoritesKey, JSON.stringify(newFavorites));
-
-      // Tüm kullanıcıların favorilerini topla
-      const allFavorites: any[] = [];
-      Object.keys(localStorage).forEach(key => {
-        if (key.startsWith('userFavorites_')) {
-          try {
-            const storedFavs = JSON.parse(localStorage.getItem(key) || '[]');
-            allFavorites.push(...storedFavs);
-          } catch (error) {
-            console.error('Favori verisi parse edilemedi:', error);
-          }
-        }
-      });
-
-      // Toplam favori sayısını hesapla
-      const totalFavoriteCount = allFavorites.filter(fav => fav.bookmarkId === id).length;
-
-      // Bookmark'ları güncelle
-      const updatedBookmarks = allBookmarks.map(bookmark =>
-        bookmark.id === id
-          ? { 
-              ...bookmark, 
-              isFavorite: !isFavorited,
-              favoriteCount: totalFavoriteCount
+      // Bookmark state'ini güncelle
+      setBookmarks(prev => prev.map(bookmark =>
+        bookmark.id === bookmarkId
+          ? {
+              ...bookmark,
+              isFavorite: result.action === 'added',
+              favoriteCount: result.action === 'added'
+                ? (bookmark.favoriteCount || 0) + 1
+                : Math.max(0, (bookmark.favoriteCount || 0) - 1)
             }
           : bookmark
-      );
-
-      saveBookmarks(updatedBookmarks);
-      
-      // Sayfadaki verileri güncelle
-      await loadData();
+      ));
 
       // Favorileri güncelle
-      const updatedFavorites = getUserFavorites();
-      setFavoriteBookmarks(updatedFavorites);
-
-      // Bookmark state'ini güncelle
-      setBookmarks(updatedBookmarks);
+      await loadData();
     } catch (error) {
       console.error('Favori işlemi başarısız:', error);
       setError(error instanceof Error ? error.message : 'Favori işlemi gerçekleştirilemedi');
@@ -315,15 +307,15 @@ export default function UserProfile() {
     }
   };
 
-  const handleTogglePinned = (id: string) => {
+  const handleTogglePinned = async (bookmarkId: string) => {
     const updatedBookmarks = bookmarks.map(bookmark =>
-      bookmark.id === id ? { ...bookmark, isPinned: !bookmark.isPinned } : bookmark
+      bookmark.id === bookmarkId ? { ...bookmark, isPinned: !bookmark.isPinned } : bookmark
     );
     setBookmarks(updatedBookmarks);
-    saveBookmarks(updatedBookmarks);
+    await saveBookmarks(updatedBookmarks);
   };
 
-  const handleAddComment = (bookmarkId: string, commentText: string) => {
+  const handleAddComment = async (bookmarkId: string, commentText: string) => {
     if (!user) return;
 
     const updatedBookmarks = bookmarks.map(bookmark =>
@@ -333,19 +325,45 @@ export default function UserProfile() {
             comments: [
               ...(bookmark.comments || []),
               {
-                id: Date.now().toString(),
+                id: Math.random().toString(36).substr(2, 9),
                 userId: user.id,
                 username: user.username,
                 text: commentText,
                 bookmarkId: bookmarkId,
                 createdAt: new Date().toISOString()
-              }
+              } as Comment
             ]
           }
         : bookmark
     );
     setBookmarks(updatedBookmarks);
-    saveBookmarks(updatedBookmarks);
+    await saveBookmarks(updatedBookmarks);
+  };
+
+  const handleTagClick = (tagName: string) => {
+    // Tag'e tıklandığında yapılacak işlemler
+    window.location.href = `/tags/${encodeURIComponent(tagName)}`;
+  };
+
+  const processBookmarksWithComments = (bookmarks: Bookmark[]) => {
+    return bookmarks.map(bookmark => ({
+      ...bookmark,
+      comments: bookmark.comments?.sort((a: Comment, b: Comment) => 
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      )
+    }));
+  };
+
+  const renderTagList = (tags: string[]) => {
+    return tags.map((tag: string) => (
+      <Link
+        key={tag}
+        href={`/tags/${encodeURIComponent(tag)}`}
+        className="inline-block bg-gray-200 rounded-full px-3 py-1 text-sm font-semibold text-gray-700 mr-2 mb-2"
+      >
+        #{tag}
+      </Link>
+    ));
   };
 
   const renderTabContent = () => {
@@ -364,24 +382,26 @@ export default function UserProfile() {
         return (
           <BookmarkList
             bookmarks={sortBookmarks(bookmarks)}
-            onRemove={handleRemoveBookmark}
+            onRemove={handleDeleteBookmark}
             onToggleFavorite={handleToggleFavorite}
             onTogglePinned={isOwnProfile ? handleTogglePinned : undefined}
             onAddComment={handleAddComment}
+            onTagClick={handleTagClick}
           />
         );
       case 'favorites':
         return (
           <BookmarkList
             bookmarks={sortBookmarks(favoriteBookmarks)}
-            onRemove={handleRemoveBookmark}
+            onRemove={handleDeleteBookmark}
             onToggleFavorite={handleToggleFavorite}
             onTogglePinned={isOwnProfile ? handleTogglePinned : undefined}
             onAddComment={handleAddComment}
+            onTagClick={handleTagClick}
           />
         );
       case 'comments':
-        const userComments = bookmarksWithComments.flatMap(bookmark => 
+        const userComments = processBookmarksWithComments(bookmarksWithComments).flatMap(bookmark => 
           (bookmark.comments || [])
             .filter(comment => comment.username === username)
             .map(comment => ({
@@ -438,15 +458,7 @@ export default function UserProfile() {
                         {/* Tagler */}
                         {comment.bookmark.tags && comment.bookmark.tags.length > 0 && (
                           <div className="flex flex-wrap gap-2 mt-2">
-                            {comment.bookmark.tags.map(tag => (
-                              <Link
-                                key={tag}
-                                href={`/tags/${encodeURIComponent(tag)}`}
-                                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 hover:bg-gray-200 transition-colors"
-                              >
-                                {tag}
-                              </Link>
-                            ))}
+                            {renderTagList(comment.bookmark.tags)}
                           </div>
                         )}
                       </div>
@@ -499,6 +511,11 @@ export default function UserProfile() {
 
   return (
     <Layout>
+      {userProfile && !userProfile.isApproved && (
+        <div className="p-4 bg-yellow-100 text-yellow-900">
+          Hesabınız henüz onaylanmamış. Lütfen yönetici onayını bekleyin.
+        </div>
+      )}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           {/* Sağ Taraf - Tab İçeriği */}
@@ -602,7 +619,7 @@ export default function UserProfile() {
                       >
                         <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 24 24">
                           <path d="M23.953 4.57a10 10 0 01-2.825.775 4.958 4.958 0 002.163-2.723c-.951.555-2.005.959-3.127 1.184a4.92 4.92 0 00-8.384 4.482C7.69 8.095 4.067 6.13 1.64 3.162a4.822 4.822 0 00-.666 2.475c0 1.71.87 3.213 2.188 4.096a4.904 4.904 0 01-2.228-.616v.06a4.923 4.923 0 003.946 4.827 4.996 4.996 0 01-2.212.085 4.936 4.936 0 004.604 3.417 9.867 9.867 0 01-6.102 2.105c-.39 0-.779-.023-1.17-.067a13.995 13.995 0 007.557 2.209c9.053 0 13.998-7.496 13.998-13.985 0-.21 0-.42-.015-.63A9.935 9.935 0 0024 4.59z"/>
-                        </svg>
+                      </svg>
                         Twitter
                       </a>
                     )}
@@ -615,7 +632,7 @@ export default function UserProfile() {
                       >
                         <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 24 24">
                           <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.463 2 11.97c0 4.404 2.865 8.14 6.839 9.458.5.092.682-.216.682-.48 0-.236-.008-.864-.013-1.695-2.782.602-3.369-1.337-3.369-1.337-.454-1.151-1.11-1.458-1.11-1.458-.908-.618.069-.606.069-.606 1.003.07 1.531 1.027 1.531 1.027.892 1.524 2.341 1.084 2.91.828.092-.643.35-1.083.636-1.332-2.22-.251-4.555-1.107-4.555-4.927 0-1.088.39-1.979 1.029-2.675-.103-.252-.446-1.266.098-2.638 0 0 .84-.268 2.75 1.022A9.606 9.606 0 0112 6.82c.85.004 1.705.114 2.504.336 1.909-1.29 2.747-1.022 2.747-1.022.546 1.372.202 2.386.1 2.638.64.696 1.028 1.587 1.028 2.675 0 3.83-2.339 4.673-4.566 4.92.359.307.678.915.678 1.846 0 1.332-.012 2.407-.012 2.734 0 .267.18.577.688.48C19.137 20.107 22 16.373 22 11.969 22 6.463 17.522 2 12 2z"/>
-                        </svg>
+                      </svg>
                         GitHub
                       </a>
                     )}

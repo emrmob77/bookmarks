@@ -2,13 +2,14 @@ import { NextResponse } from 'next/server';
 
 export async function GET() {
   try {
-    const savedSettings = localStorage.getItem('seoSettings');
-    let robotsTxt = 'User-agent: *\nAllow: /';
+    const robotsTxt = `User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /admin/
+Disallow: /auth/
+Disallow: /settings/
 
-    if (savedSettings) {
-      const settings = JSON.parse(savedSettings);
-      robotsTxt = settings.robotsTxt;
-    }
+Sitemap: ${process.env.NEXT_PUBLIC_BASE_URL}/sitemap.xml`;
 
     return new NextResponse(robotsTxt, {
       headers: {

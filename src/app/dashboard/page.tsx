@@ -5,48 +5,104 @@ import Link from 'next/link';
 import Layout from '@/components/Layout';
 import BookmarkForm from '@/components/BookmarkForm';
 import SearchBar from '@/components/SearchBar';
-import { Bookmark, NewBookmark } from '@/types';
-import { getBookmarks, saveBookmarks } from '@/lib/storage';
+import { Bookmark, NewBookmark, Comment } from '@/types';
+import { getBookmarks, updateBookmark, addBookmark, deleteBookmark, toggleFavorite } from '@/lib/storage';
 import { useAuth } from '@/contexts/AuthContext';
 import BookmarkList from '@/components/BookmarkList';
+import { toast } from 'react-hot-toast';
+import { useRouter } from 'next/navigation';
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const router = useRouter();
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('bookmarks');
   const [editingBookmark, setEditingBookmark] = useState<Bookmark | undefined>();
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const loadedBookmarks = getBookmarks();
-    setBookmarks(loadedBookmarks);
+    const fetchBookmarks = async () => {
+      setLoading(true);
+      try {
+        const data = await getBookmarks();
+        setBookmarks(data);
+      } catch (error) {
+        console.error('Error fetching bookmarks:', error);
+      }
+      setLoading(false);
+    };
+    fetchBookmarks();
   }, []);
 
-  const handleAddBookmark = (bookmark: NewBookmark) => {
+  const handleAddBookmark = async (bookmark: NewBookmark) => {
     if (!user) return;
 
-    const newBookmark: Bookmark = {
-      ...bookmark,
-      id: Date.now().toString(),
-      createdAt: new Date().toISOString(),
-      isOwner: true,
-      isFavorite: false,
-      isPinned: false,
-      username: user.username,
-      comments: [],
-      favoriteCount: 0
-    };
-    const updatedBookmarks = [newBookmark, ...bookmarks];
-    setBookmarks(updatedBookmarks);
-    saveBookmarks(updatedBookmarks);
+    try {
+      const newBookmark: Bookmark = {
+        ...bookmark,
+        id: Date.now().toString(),
+        createdAt: new Date().toISOString(),
+        favoriteCount: 0,
+        isFavorite: false,
+        isPinned: false,
+        comments: [],
+        tags: bookmark.tags || [],
+        isPublic: bookmark.isPublic ?? true,
+        userId: user.id,
+        username: user.username
+      };
+
+      console.log('Gönderilen yer imi verisi:', {
+        url: newBookmark.url,
+        title: newBookmark.title,
+        description: newBookmark.description,
+        isPublic: newBookmark.isPublic,
+        tags: newBookmark.tags,
+        userId: newBookmark.userId,
+        username: newBookmark.username
+      });
+
+      const savedBookmark = await addBookmark(newBookmark);
+      console.log('Kaydedilen yer imi:', savedBookmark);
+      
+      // Tüm yer imlerini tekrar yükle
+      const loadedBookmarks = await getBookmarks({
+        userId: user.id,
+        page: 1,
+        limit: 10
+      });
+      setBookmarks(loadedBookmarks);
+    } catch (error: any) {
+      console.error('Bookmark eklenirken hata oluştu:', error);
+      console.error('Hata detayları:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+        response: error.response
+      });
+      // Kullanıcıya hata mesajını göster
+      alert(`Yer imi eklenirken bir hata oluştu: ${error.message}`);
+    }
   };
 
-  const handleUpdateBookmark = (updatedBookmark: Bookmark) => {
-    const updatedBookmarks = bookmarks.map(bookmark =>
-      bookmark.id === updatedBookmark.id ? { ...updatedBookmark, comments: bookmark.comments || [] } : bookmark
-    );
-    setBookmarks(updatedBookmarks);
-    saveBookmarks(updatedBookmarks);
+  const handleUpdateBookmark = async (updatedBookmark: Bookmark) => {
+    if (!user) return;
+
+    try {
+      await updateBookmark(updatedBookmark);
+      
+      // Tüm yer imlerini tekrar yükle
+      const loadedBookmarks = await getBookmarks({
+        userId: user.id,
+        page: 1,
+        limit: 10
+      });
+      setBookmarks(loadedBookmarks);
+    } catch (error) {
+      console.error('Bookmark güncellenirken hata oluştu:', error);
+      toast.error('Yer imi güncellenirken bir hata oluştu');
+    }
     setEditingBookmark(undefined);
   };
 
@@ -54,126 +110,104 @@ export default function Dashboard() {
     setSearchTerm(term);
   };
 
-  const handleRemoveBookmark = (id: string) => {
-    const updatedBookmarks = bookmarks.filter(b => b.id !== id);
-    setBookmarks(updatedBookmarks);
-    saveBookmarks(updatedBookmarks);
-  };
-
-  const handleToggleFavorite = (bookmarkId: string) => {
-    if (!user) return;
-    
-    // Tüm bookmarkları al
-    const allBookmarks = getBookmarks();
-    const targetBookmark = allBookmarks.find(b => b.id === bookmarkId);
-    
-    if (!targetBookmark) return;
-
-    // Kullanıcının favorilerini al
-    const userFavoritesKey = `userFavorites_${user.id}`;
-    let userFavorites = [];
+  const handleRemoveBookmark = async (id: string) => {
     try {
-      userFavorites = JSON.parse(localStorage.getItem(userFavoritesKey) || '[]');
+      await deleteBookmark(id);
+      // Local state'i güncelle
+      setBookmarks(prevBookmarks => prevBookmarks.filter(b => b.id !== id));
     } catch (error) {
-      console.error('Favori verisi parse edilemedi:', error);
+      console.error('Bookmark silinirken hata oluştu:', error);
+      alert('Yer imi silinirken bir hata oluştu');
     }
+  };
 
-    const isFavorited = userFavorites.some((fav: any) => fav.bookmarkId === bookmarkId);
-    let newFavorites;
+  const handleTogglePinned = async (bookmarkId: string) => {
+    if (!user) return;
     
-    if (isFavorited) {
-      newFavorites = userFavorites.filter((fav: any) => fav.bookmarkId !== bookmarkId);
-    } else {
-      const newFavorite = {
-        bookmarkId,
-        userId: user.id,
-        createdAt: new Date().toISOString(),
-        bookmarkData: targetBookmark
+    const bookmark = bookmarks.find(b => b.id === bookmarkId);
+    if (!bookmark) return;
+
+    try {
+      const updatedBookmark: Bookmark = {
+        ...bookmark,
+        isPinned: !bookmark.isPinned
       };
-      newFavorites = [...userFavorites, newFavorite];
+
+      await updateBookmark(updatedBookmark);
+      
+      // Tüm yer imlerini tekrar yükle
+      const loadedBookmarks = await getBookmarks({
+        userId: user.id,
+        page: 1,
+        limit: 10
+      });
+      setBookmarks(loadedBookmarks);
+    } catch (error) {
+      console.error('Pinleme işlemi sırasında hata:', error);
+      toast.error('Pinleme işlemi başarısız oldu');
     }
-
-    // Local storage'ı güncelle
-    localStorage.setItem(userFavoritesKey, JSON.stringify(newFavorites));
-
-    // Tüm kullanıcıların favorilerini topla
-    const allFavorites: any[] = [];
-    Object.keys(localStorage).forEach(key => {
-      if (key.startsWith('userFavorites_')) {
-        try {
-          const storedFavs = JSON.parse(localStorage.getItem(key) || '[]');
-          allFavorites.push(...storedFavs);
-        } catch (error) {
-          console.error('Favori verisi parse edilemedi:', error);
-        }
-      }
-    });
-
-    // Toplam favori sayısını hesapla
-    const totalFavoriteCount = allFavorites.filter(fav => fav.bookmarkId === bookmarkId).length;
-
-    // Bookmark'ları güncelle
-    const updatedBookmarks = allBookmarks.map(bookmark =>
-      bookmark.id === bookmarkId
-        ? { 
-            ...bookmark, 
-            isFavorite: !isFavorited,
-            favoriteCount: totalFavoriteCount
-          }
-        : bookmark
-    );
-
-    setBookmarks(updatedBookmarks);
-    saveBookmarks(updatedBookmarks);
   };
 
-  const handleTogglePinned = (bookmarkId: string) => {
+  const handleToggleFavorite = async (bookmarkId: string) => {
     if (!user) return;
     
-    const updatedBookmarks = bookmarks.map(bookmark =>
-      bookmark.id === bookmarkId && bookmark.username === user.username
-        ? { 
-            ...bookmark, 
-            isPinned: !bookmark.isPinned
-          }
-        : bookmark
-    );
-    setBookmarks(updatedBookmarks);
-    saveBookmarks(updatedBookmarks);
+    const bookmark = bookmarks.find(b => b.id === bookmarkId);
+    if (!bookmark) return;
+
+    try {
+      const result = await toggleFavorite(bookmarkId);
+      
+      const updatedBookmark: Bookmark = {
+        ...bookmark,
+        isFavorite: result.action === 'added',
+        favoriteCount: result.action === 'added'
+          ? (bookmark.favoriteCount || 0) + 1
+          : Math.max(0, (bookmark.favoriteCount || 0) - 1)
+      };
+
+      const updatedBookmarks = bookmarks.map(b =>
+        b.id === bookmarkId ? updatedBookmark : b
+      );
+      setBookmarks(updatedBookmarks);
+    } catch (error) {
+      console.error('Favori işlemi başarısız:', error);
+      toast.error('Favori işlemi gerçekleştirilemedi');
+    }
   };
 
-  const handleAddComment = (bookmarkId: string, commentText: string) => {
+  const handleAddComment = async (bookmarkId: string, commentText: string) => {
     if (!user) return;
 
-    const updatedBookmarks = bookmarks.map(bookmark =>
-      bookmark.id === bookmarkId
-        ? {
-            ...bookmark,
-            comments: [
-              ...(bookmark.comments || []),
-              {
-                id: Date.now().toString(),
-                text: commentText,
-                username: user.username,
-                createdAt: new Date().toISOString()
-              }
-            ]
-          }
-        : bookmark
-    );
-    const typedBookmarks: Bookmark[] = updatedBookmarks.map(bookmark => ({
-      ...bookmark,
-      comments: bookmark.comments?.map(comment => ({
-        ...comment,
-        bookmarkId: bookmark.id,
-        userId: user?.id || ''
-      })) || []
-    }));
-    setBookmarks(typedBookmarks);
-    saveBookmarks(typedBookmarks);
+    try {
+      const bookmark = bookmarks.find(b => b.id === bookmarkId);
+      if (!bookmark) return;
+
+      const newComment: Comment = {
+        id: Date.now().toString(),
+        text: commentText,
+        userId: user.id,
+        username: user.username,
+        bookmarkId,
+        createdAt: new Date().toISOString()
+      };
+
+      const updatedBookmark = {
+        ...bookmark,
+        comments: [...(bookmark.comments || []), newComment]
+      };
+
+      const savedBookmark = await updateBookmark(updatedBookmark);
+      const updatedBookmarks = bookmarks.map(b =>
+        b.id === bookmarkId ? savedBookmark : b
+      );
+      
+      setBookmarks(updatedBookmarks);
+    } catch (error) {
+      console.error('Yorum eklenirken hata oluştu:', error);
+    }
   };
 
-  const filteredBookmarks = bookmarks.filter(bookmark => {
+  const filteredBookmarks = (bookmarks || []).filter(bookmark => {
     const matchesSearch = bookmark.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          bookmark.url.toLowerCase().includes(searchTerm.toLowerCase());
     
@@ -183,9 +217,9 @@ export default function Dashboard() {
       case 'bookmarks':
         return matchesSearch && bookmark.username === user.username;
       case 'favorites':
-        return matchesSearch && bookmark.isFavorite && bookmark.username === user.username;
+        return matchesSearch;
       case 'comments':
-        return matchesSearch && bookmark.comments?.some(comment => comment.username === user.username);
+        return matchesSearch && bookmark.comments?.some(comment => comment.userId === user.id) || false;
       default:
         return false;
     }

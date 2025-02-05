@@ -89,9 +89,9 @@ export default function ClientTagPage({ name }: Props) {
           {bookmarks.length > 0 ? (
             <BookmarkList 
               bookmarks={bookmarks}
-              onRemove={() => {}}
-              onToggleFavorite={() => {}}
-              onAddComment={() => {}}
+              onRemove={async () => {}}
+              onToggleFavorite={async () => {}}
+              onAddComment={async () => {}}
             />
           ) : (
             <p className="text-gray-500">No bookmarks found with this tag.</p>

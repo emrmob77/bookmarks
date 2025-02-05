@@ -2,26 +2,18 @@
 
 import { format } from 'date-fns';
 import Link from 'next/link';
-import { Bookmark } from '@/types';
+import type { Bookmark, Comment } from '@/types';
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-
-interface Comment {
-  id: string;
-  text: string;
-  userId: string;
-  username: string;
-  bookmarkId: string;
-  createdAt: string;
-}
+import toast from '@/lib/toast';
 
 interface BookmarkListProps {
   bookmarks: Bookmark[];
-  onRemove: (id: string) => void;
-  onToggleFavorite: (id: string) => void;
-  onTogglePinned?: (id: string) => void;
+  onRemove: (id: string) => Promise<void>;
+  onToggleFavorite: (id: string) => Promise<void>;
+  onTogglePinned?: (id: string) => Promise<void>;
   onEdit?: (bookmark: Bookmark) => void;
-  onAddComment: (bookmarkId: string, commentText: string) => void;
+  onAddComment: (bookmarkId: string, commentText: string) => Promise<void>;
   onTagClick?: (tagName: string) => void;
 }
 
@@ -30,10 +22,11 @@ export default function BookmarkList({ bookmarks, onRemove, onToggleFavorite, on
   const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
   const [commentText, setCommentText] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState<{ [key: string]: boolean }>({});
 
   const handleCommentClick = (bookmarkId: string) => {
     if (!user) {
-      setError('Yorum yapmak için giriş yapmalısınız');
+      setError('Please login to add a comment');
       return;
     }
     setActiveCommentId(activeCommentId === bookmarkId ? null : bookmarkId);
@@ -41,14 +34,35 @@ export default function BookmarkList({ bookmarks, onRemove, onToggleFavorite, on
     setError(null);
   };
 
-  const handleCommentSubmit = (bookmarkId: string) => {
+  const handleCommentSubmit = async (bookmarkId: string) => {
     if (!commentText.trim() || !user) {
-      setError('Lütfen bir yorum yazın');
+      setError('Please enter a comment');
       return;
     }
-    onAddComment(bookmarkId, commentText);
-    setCommentText('');
-    setError(null);
+
+    try {
+      setLoading(prev => ({ ...prev, [bookmarkId]: true }));
+      await onAddComment(bookmarkId, commentText);
+      setCommentText('');
+      setError(null);
+      setActiveCommentId(null);
+    } catch (error: any) {
+      setError(error.message || 'Failed to add comment');
+    } finally {
+      setLoading(prev => ({ ...prev, [bookmarkId]: false }));
+    }
+  };
+
+  const handleAction = async (action: (id: string) => Promise<void>, id: string) => {
+    try {
+      setLoading(prev => ({ ...prev, [id]: true }));
+      await action(id);
+    } catch (error: any) {
+      console.error('Action failed:', error);
+      toast.error(error.message || 'Action failed');
+    } finally {
+      setLoading(prev => ({ ...prev, [id]: false }));
+    }
   };
 
   return (
@@ -63,7 +77,7 @@ export default function BookmarkList({ bookmarks, onRemove, onToggleFavorite, on
               <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
               </svg>
-              Pinned by Admin
+              Pinned by {bookmark.username}
             </div>
           )}
 
@@ -86,31 +100,34 @@ export default function BookmarkList({ bookmarks, onRemove, onToggleFavorite, on
                 <div className="flex items-center space-x-2">
                   {onTogglePinned && (
                     <button
-                      onClick={() => onTogglePinned(bookmark.id)}
+                      onClick={() => handleAction(onTogglePinned, bookmark.id)}
                       className={`text-gray-400 hover:text-blue-500 transition-colors flex items-center ${
                         bookmark.isPinned ? 'text-blue-500' : ''
                       }`}
+                      disabled={loading[bookmark.id]}
                     >
                       <svg className="w-5 h-5" fill={bookmark.isPinned ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
                       </svg>
                     </button>
                   )}
-                  <button
-                    onClick={() => onToggleFavorite(bookmark.id)}
-                    className={`text-gray-400 hover:text-red-500 transition-colors flex items-center ${
-                      bookmark.isFavorite ? 'text-red-500' : ''
-                    }`}
-                    disabled={!user}
-                    title={!user ? 'Please login to add to favorites' : bookmark.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-                  >
-                    <svg className="w-5 h-5" fill={bookmark.isFavorite ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                    </svg>
-                    <span className={`ml-1 text-sm ${bookmark.isFavorite ? 'text-red-500' : 'text-gray-500'}`}>
-                      {bookmark.favoriteCount || 0}
-                    </span>
-                  </button>
+                  {user && user.id !== bookmark.userId && (
+                    <button
+                      onClick={() => onToggleFavorite(bookmark.id)}
+                      className={`text-gray-400 hover:text-red-500 transition-colors flex items-center ${
+                        bookmark.isFavorite ? 'text-red-500' : ''
+                      }`}
+                      disabled={!user || loading[bookmark.id]}
+                      title={!user ? 'Please login to add to favorites' : bookmark.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                    >
+                      <svg className="w-5 h-5" fill={bookmark.isFavorite ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                      </svg>
+                      <span className={`ml-1 text-sm ${bookmark.isFavorite ? 'text-red-500' : 'text-gray-500'}`}>
+                        {bookmark.favoriteCount || 0}
+                      </span>
+                    </button>
+                  )}
                   <button
                     className={`text-gray-400 hover:text-blue-500 transition-colors flex items-center ${
                       activeCommentId === bookmark.id ? 'text-blue-500' : ''
@@ -138,9 +155,10 @@ export default function BookmarkList({ bookmarks, onRemove, onToggleFavorite, on
                   )}
                   {user && (user.id === bookmark.userId || user.role === 'admin') && (
                     <button
-                      onClick={() => onRemove(bookmark.id)}
+                      onClick={() => handleAction(onRemove, bookmark.id)}
                       className="text-gray-400 hover:text-red-500 transition-colors"
                       title="Sil"
+                      disabled={loading[bookmark.id]}
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -226,21 +244,24 @@ export default function BookmarkList({ bookmarks, onRemove, onToggleFavorite, on
               {activeCommentId === bookmark.id && bookmark.comments && bookmark.comments.length > 0 && (
                 <div className="mt-4 space-y-3">
                   <h3 className="text-sm font-medium text-gray-900">Comments</h3>
-                  {bookmark.comments.map(comment => (
-                    <div key={comment.id} className="flex space-x-3 text-sm">
-                      <div className="flex-shrink-0">
-                        <Link href={`/users/${encodeURIComponent(comment.username)}`} className="font-medium text-gray-900">
-                          {comment.username}
-                        </Link>
+                  {(bookmark.comments || []).map((comment) => {
+                    const typedComment = comment as Comment;
+                    return (
+                      <div key={typedComment.id} className="flex space-x-3 text-sm">
+                        <div className="flex-shrink-0">
+                          <Link href={`/users/${encodeURIComponent(typedComment.username)}`} className="font-medium text-gray-900">
+                            {typedComment.username}
+                          </Link>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-gray-500">{typedComment.text}</p>
+                          <p className="text-xs text-gray-400 mt-1">
+                            {format(new Date(typedComment.createdAt), 'MMM d, yyyy HH:mm')}
+                          </p>
+                        </div>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-gray-500">{comment.text}</p>
-                        <p className="text-xs text-gray-400 mt-1">
-                          {format(new Date(comment.createdAt), 'MMM d, yyyy HH:mm')}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

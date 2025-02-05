@@ -1,159 +1,161 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { signIn, signOut, useSession } from 'next-auth/react';
 import { User } from '@/types';
 
 interface AuthContextType {
   user: User | null;
-  isAuthenticated: boolean;
+  loading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
   register: (email: string, password: string, username: string) => Promise<void>;
-  logout: () => void;
-  updateProfile: (data: Partial<User>) => void;
-  isLoading: boolean;
+  updateProfile: (data: Partial<User>) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
-  const pathname = usePathname();
   const [user, setUser] = useState<User | null>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+  const { data: session, status } = useSession();
 
   useEffect(() => {
-    const initializeAuth = async () => {
-      try {
-        if (typeof window !== 'undefined') {
-          // Admin kullanıcısını kontrol et ve yoksa oluştur
-          const users = JSON.parse(localStorage.getItem('users') || '[]');
-          if (users.length === 0) {
-            const adminUser: User = {
-              id: '1',
-              email: 'admin@example.com',
-              username: 'admin',
-              isAdmin: true,
-              createdAt: new Date().toISOString()
-            };
-            localStorage.setItem('users', JSON.stringify([adminUser]));
-          }
-
-          const storedUser = localStorage.getItem('user');
-          if (storedUser) {
-            const parsedUser = JSON.parse(storedUser);
-            setUser(parsedUser);
-            setIsAuthenticated(true);
-          }
-        }
-      } catch (error) {
-        console.error('Error initializing auth:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    initializeAuth();
-  }, []);
-
-  useEffect(() => {
-    if (!isLoading) {
-      const protectedRoutes = ['/dashboard', '/settings', '/admin'];
-      if (protectedRoutes.some(route => pathname?.startsWith(route))) {
-        if (!isAuthenticated) {
-          router.push('/auth/login');
-        } else if (pathname?.startsWith('/admin') && !user?.isAdmin) {
-          router.push('/');
-        }
-      }
+    if (status === 'loading') {
+      setLoading(true);
+      return;
     }
-  }, [isLoading, isAuthenticated, pathname, router, user]);
+
+    if (session?.user) {
+      const sessionUser = session.user as any;
+      const user: User = {
+        id: sessionUser.id,
+        email: sessionUser.email,
+        username: sessionUser.username,
+        role: sessionUser.role || 'user',
+        isAdmin: sessionUser.isAdmin || false,
+        createdAt: sessionUser.createdAt || new Date().toISOString(),
+        updatedAt: sessionUser.updatedAt || new Date().toISOString(),
+        bio: sessionUser.bio,
+        website: sessionUser.website,
+        twitter: sessionUser.twitter,
+        github: sessionUser.github,
+        settings: {
+          isApproved: sessionUser.isApproved || false,
+          isPremium: sessionUser.settings?.isPremium || false,
+          maxBookmarks: sessionUser.maxBookmarks || 100
+        }
+      };
+      setUser(user);
+    } else {
+      setUser(null);
+    }
+    
+    setLoading(false);
+  }, [session, status]);
 
   const login = async (email: string, password: string) => {
     try {
-      const users = JSON.parse(localStorage.getItem('users') || '[]');
-      const foundUser = users.find((u: User) => u.email === email);
+      setLoading(true);
       
-      if (!foundUser) {
-        throw new Error('User not found');
+      const signInResult = await signIn('credentials', {
+        email,
+        password,
+        redirect: false
+      });
+
+      if (signInResult?.error) {
+        throw new Error(signInResult.error);
       }
 
-      localStorage.setItem('user', JSON.stringify(foundUser));
-      setUser(foundUser);
-      setIsAuthenticated(true);
-      router.push(foundUser.isAdmin ? '/admin' : '/dashboard');
+      // Oturum güncellenmesini bekle
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Oturum başarıyla açıldıysa dashboard'a yönlendir
+      if (signInResult?.ok) {
+        router.push('/dashboard');
+      }
+    } catch (error: any) {
+      console.error('Giriş hatası:', error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const logout = async () => {
+    try {
+      setLoading(true);
+      await signOut({ redirect: false });
+      setUser(null);
+      router.push('/signin');
     } catch (error) {
-      throw new Error('Login failed');
+      console.error('Çıkış hatası:', error);
+      throw error;
+    } finally {
+      setLoading(false);
     }
   };
 
   const register = async (email: string, password: string, username: string) => {
     try {
-      const users = JSON.parse(localStorage.getItem('users') || '[]');
-      const newUser: User = {
-        id: Date.now().toString(),
-        email,
-        username,
-        isAdmin: false,
-        createdAt: new Date().toISOString()
-      };
+      setLoading(true);
       
-      users.push(newUser);
-      localStorage.setItem('users', JSON.stringify(users));
-      localStorage.setItem('user', JSON.stringify(newUser));
-      setUser(newUser);
-      setIsAuthenticated(true);
+      const response = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password, username }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || 'Kayıt işlemi başarısız oldu');
+      }
+
+      // Kayıt başarılı olduktan sonra otomatik giriş yap
+      await login(email, password);
       router.push('/dashboard');
     } catch (error) {
-      throw new Error('Registration failed');
+      console.error('Kayıt hatası:', error);
+      throw error;
+    } finally {
+      setLoading(false);
     }
   };
 
-  const updateProfile = (data: Partial<User>) => {
-    if (user && typeof window !== 'undefined') {
-      const updatedUser = { ...user, ...data };
-      const users = JSON.parse(localStorage.getItem('users') || '[]');
-      const updatedUsers = users.map((u: User) => 
-        u.id === user.id ? updatedUser : u
-      );
+  const updateProfile = async (data: Partial<User>) => {
+    try {
+      setLoading(true);
+      
+      const response = await fetch('/api/users/profile', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
 
-      localStorage.setItem('users', JSON.stringify(updatedUsers));
-      localStorage.setItem('user', JSON.stringify(updatedUser));
-      setUser(updatedUser);
-
-      if (data.username && data.username !== user.username) {
-        const bookmarks = JSON.parse(localStorage.getItem('bookmarks') || '[]');
-        const updatedBookmarks = bookmarks.map((bookmark: any) => {
-          if (bookmark.userId === user.id) {
-            return { ...bookmark, username: data.username };
-          }
-          return bookmark;
-        });
-        localStorage.setItem('bookmarks', JSON.stringify(updatedBookmarks));
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Profil güncellenemedi');
       }
+
+      const updatedUser = await response.json();
+      setUser(updatedUser);
+    } catch (error) {
+      console.error('Profil güncelleme hatası:', error);
+      throw error;
+    } finally {
+      setLoading(false);
     }
   };
-
-  const logout = () => {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('user');
-    }
-    setUser(null);
-    setIsAuthenticated(false);
-    router.push('/');
-  };
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
-      </div>
-    );
-  }
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated, login, register, logout, updateProfile, isLoading }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, register, updateProfile }}>
       {children}
     </AuthContext.Provider>
   );
@@ -165,4 +167,4 @@ export function useAuth() {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
-} 
+}

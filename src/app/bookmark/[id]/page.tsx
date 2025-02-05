@@ -4,7 +4,7 @@ import { useParams } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import Layout from '@/components/Layout';
 import { Bookmark } from '@/types';
-import { getBookmarks, saveBookmarks } from '@/lib/storage';
+import { getBookmarks, deleteBookmark } from '@/lib/storage';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
@@ -18,42 +18,46 @@ export default function BookmarkDetail() {
   const [editingCommentText, setEditingCommentText] = useState('');
 
   useEffect(() => {
-    const loadBookmark = () => {
-      const allBookmarks = getBookmarks();
-      const foundBookmark = allBookmarks.find(b => b.id === params.id);
-      if (foundBookmark) {
-        // Kullanıcının favorilerini kontrol et
-        if (user) {
-          const userFavoritesKey = `userFavorites_${user.id}`;
-          try {
-            const userFavorites = JSON.parse(localStorage.getItem(userFavoritesKey) || '[]');
-            foundBookmark.isFavorite = userFavorites.some((fav: any) => fav.bookmarkId === foundBookmark.id);
-          } catch (error) {
-            console.error('Favori verisi yüklenirken hata:', error);
-          }
-        }
-
-        // Toplam favori sayısını hesapla
-        const allFavorites: any[] = [];
-        Object.keys(localStorage).forEach(key => {
-          if (key.startsWith('userFavorites_')) {
+    const loadBookmark = async () => {
+      try {
+        const allBookmarks = await getBookmarks();
+        const foundBookmark = allBookmarks.find(b => b.id === params.id);
+        if (foundBookmark) {
+          // Kullanıcının favorilerini kontrol et
+          if (user) {
+            const userFavoritesKey = `userFavorites_${user.id}`;
             try {
-              const storedFavs = JSON.parse(localStorage.getItem(key) || '[]');
-              allFavorites.push(...storedFavs);
+              const userFavorites = JSON.parse(localStorage.getItem(userFavoritesKey) || '[]');
+              foundBookmark.isFavorite = userFavorites.some((fav: any) => fav.bookmarkId === foundBookmark.id);
             } catch (error) {
-              console.error('Favori verisi parse edilemedi:', error);
+              console.error('Favori verisi yüklenirken hata:', error);
             }
           }
-        });
-        foundBookmark.favoriteCount = allFavorites.filter(fav => fav.bookmarkId === foundBookmark.id).length;
+
+          // Toplam favori sayısını hesapla
+          const allFavorites: any[] = [];
+          Object.keys(localStorage).forEach(key => {
+            if (key.startsWith('userFavorites_')) {
+              try {
+                const storedFavs = JSON.parse(localStorage.getItem(key) || '[]');
+                allFavorites.push(...storedFavs);
+              } catch (error) {
+                console.error('Favori verisi parse edilemedi:', error);
+              }
+            }
+          });
+          foundBookmark.favoriteCount = allFavorites.filter(fav => fav.bookmarkId === foundBookmark.id).length;
+        }
+        setBookmark(foundBookmark || null);
+      } catch (error) {
+        console.error('Bookmark yüklenirken hata oluştu:', error);
       }
-      setBookmark(foundBookmark || null);
     };
 
     loadBookmark();
   }, [params.id, user]);
 
-  const handleToggleFavorite = () => {
+  const handleToggleFavorite = async () => {
     if (!user || !bookmark) return;
 
     const userFavoritesKey = `userFavorites_${user.id}`;
@@ -81,17 +85,17 @@ export default function BookmarkDetail() {
     localStorage.setItem(userFavoritesKey, JSON.stringify(newFavorites));
 
     // Bookmark'ı güncelle
-    const allBookmarks = getBookmarks();
-    const updatedBookmarks = allBookmarks.map(b =>
+    const allBookmarks = await getBookmarks();
+    const updatedBookmarks = allBookmarks.map((b: Bookmark) =>
       b.id === bookmark.id
         ? { ...b, isFavorite: !isFavorited }
         : b
     );
-    saveBookmarks(updatedBookmarks);
+    localStorage.setItem('bookmarks', JSON.stringify(updatedBookmarks));
     setBookmark(prev => prev ? { ...prev, isFavorite: !isFavorited } : null);
   };
 
-  const handleAddComment = () => {
+  const handleAddComment = async () => {
     if (!user || !bookmark || !commentText.trim()) return;
 
     const newComment = {
@@ -103,13 +107,13 @@ export default function BookmarkDetail() {
       createdAt: new Date().toISOString()
     };
 
-    const allBookmarks = getBookmarks();
-    const updatedBookmarks = allBookmarks.map(b =>
+    const allBookmarks = await getBookmarks();
+    const updatedBookmarks = allBookmarks.map((b: Bookmark) =>
       b.id === bookmark.id
         ? { ...b, comments: [...(b.comments || []), newComment] }
         : b
     );
-    saveBookmarks(updatedBookmarks);
+    localStorage.setItem('bookmarks', JSON.stringify(updatedBookmarks));
     setBookmark(prev => prev ? { ...prev, comments: [...(prev.comments || []), newComment] } : null);
     setCommentText('');
   };
@@ -119,15 +123,15 @@ export default function BookmarkDetail() {
     setEditingCommentText(text);
   };
 
-  const handleUpdateComment = () => {
+  const handleUpdateComment = async () => {
     if (!user || !bookmark || !editingCommentText.trim() || !editingCommentId) return;
 
-    const allBookmarks = getBookmarks();
-    const updatedBookmarks = allBookmarks.map(b =>
+    const allBookmarks = await getBookmarks();
+    const updatedBookmarks = allBookmarks.map((b: Bookmark) =>
       b.id === bookmark.id
         ? {
             ...b,
-            comments: (b.comments || []).map(comment =>
+            comments: (b.comments || []).map((comment: any) =>
               comment.id === editingCommentId
                 ? { ...comment, text: editingCommentText }
                 : comment
@@ -136,7 +140,7 @@ export default function BookmarkDetail() {
         : b
     );
 
-    saveBookmarks(updatedBookmarks);
+    localStorage.setItem('bookmarks', JSON.stringify(updatedBookmarks));
     setBookmark(prev => prev ? {
       ...prev,
       comments: (prev.comments || []).map(comment =>
@@ -149,29 +153,47 @@ export default function BookmarkDetail() {
     setEditingCommentText('');
   };
 
-  const handleDeleteComment = (commentId: string) => {
+  const handleDeleteComment = async () => {
     if (!user || !bookmark) return;
 
-    const allBookmarks = getBookmarks();
-    const updatedBookmarks = allBookmarks.map(b =>
+    const allBookmarks = await getBookmarks();
+    const updatedBookmarks = allBookmarks.map((b: Bookmark) =>
       b.id === bookmark.id
         ? {
             ...b,
-            comments: (b.comments || []).filter(comment => comment.id !== commentId)
+            comments: (b.comments || []).filter((comment: any) => comment.id !== editingCommentId)
           }
         : b
     );
 
-    saveBookmarks(updatedBookmarks);
+    localStorage.setItem('bookmarks', JSON.stringify(updatedBookmarks));
     setBookmark(prev => prev ? {
       ...prev,
-      comments: (prev.comments || []).filter(comment => comment.id !== commentId)
+      comments: (prev.comments || []).filter(comment => comment.id !== editingCommentId)
     } : null);
   };
 
   const handleCancelEdit = () => {
     setEditingCommentId(null);
     setEditingCommentText('');
+  };
+
+  const handleDeleteBookmark = async () => {
+    if (!user || !bookmark) return;
+
+    // Silme işlemini onayla
+    if (!confirm('Bu yer imini silmek istediğinizden emin misiniz?')) {
+      return;
+    }
+
+    try {
+      await deleteBookmark(bookmark.id);
+      alert('Yer imi başarıyla silindi!');
+      window.location.href = '/';
+    } catch (error) {
+      console.error('Yer imi silinirken hata:', error);
+      alert('Yer imi silinirken bir hata oluştu');
+    }
   };
 
   if (!bookmark) {
@@ -324,7 +346,7 @@ export default function BookmarkDetail() {
                                       </svg>
                                     </button>
                                     <button
-                                      onClick={() => handleDeleteComment(comment.id)}
+                                      onClick={handleDeleteComment}
                                       className="text-gray-400 hover:text-red-600 transition-colors duration-200"
                                       title="Delete comment"
                                     >
@@ -441,9 +463,22 @@ export default function BookmarkDetail() {
                 ))}
               </div>
             </div>
+            {user && user.id === bookmark.userId && (
+              <div className="bg-white rounded-lg shadow-sm p-6">
+                <button
+                  onClick={handleDeleteBookmark}
+                  className="text-gray-400 hover:text-red-600 transition-colors duration-200"
+                  title="Delete bookmark"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
     </Layout>
   );
-} 
+}

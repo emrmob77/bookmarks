@@ -1,25 +1,25 @@
 import { NextResponse } from 'next/server';
 
-export async function GET(request: Request) {
+export async function GET() {
   try {
     let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
     xml += '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
     
     // Yer imleri site haritası
     xml += `  <sitemap>\n`;
-    xml += `    <loc>${new URL(request.url).origin}/api/sitemaps/bookmarks</loc>\n`;
+    xml += `    <loc>${process.env.NEXT_PUBLIC_BASE_URL}/api/sitemaps/bookmarks</loc>\n`;
     xml += `    <lastmod>${new Date().toISOString()}</lastmod>\n`;
     xml += `  </sitemap>\n`;
     
     // Kullanıcılar site haritası
     xml += `  <sitemap>\n`;
-    xml += `    <loc>${new URL(request.url).origin}/api/sitemaps/users</loc>\n`;
+    xml += `    <loc>${process.env.NEXT_PUBLIC_BASE_URL}/api/sitemaps/users</loc>\n`;
     xml += `    <lastmod>${new Date().toISOString()}</lastmod>\n`;
     xml += `  </sitemap>\n`;
     
     // Etiketler site haritası
     xml += `  <sitemap>\n`;
-    xml += `    <loc>${new URL(request.url).origin}/api/sitemaps/tags</loc>\n`;
+    xml += `    <loc>${process.env.NEXT_PUBLIC_BASE_URL}/api/sitemaps/tags</loc>\n`;
     xml += `    <lastmod>${new Date().toISOString()}</lastmod>\n`;
     xml += `  </sitemap>\n`;
     

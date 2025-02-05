@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import Layout from '@/components/Layout';
 import { useAuth } from '@/contexts/AuthContext';
 import { redirect } from 'next/navigation';
+import { getProfile, updateProfile } from '@/lib/storage';
+import { Spinner } from "@/components/ui/spinner";
 
 export default function Settings() {
   const { user } = useAuth();
@@ -16,24 +18,37 @@ export default function Settings() {
     github: ''
   });
   const [notification, setNotification] = useState<{type: 'success' | 'error', message: string} | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!user) {
       redirect('/auth/login');
     }
 
-    const userData = localStorage.getItem('user');
-    if (userData) {
-      const parsedUser = JSON.parse(userData);
-      setFormData({
-        username: parsedUser.username || '',
-        email: parsedUser.email || '',
-        bio: parsedUser.bio || '',
-        website: parsedUser.website || '',
-        twitter: parsedUser.twitter || '',
-        github: parsedUser.github || ''
-      });
-    }
+    // Profil bilgilerini getir
+    const loadProfile = async () => {
+      try {
+        const profile = await getProfile();
+        setFormData({
+          username: profile.username || '',
+          email: profile.email || '',
+          bio: profile.bio || '',
+          website: profile.website || '',
+          twitter: profile.twitter ? '@' + profile.twitter : '',
+          github: profile.github || ''
+        });
+      } catch (error) {
+        console.error('Profil bilgileri yüklenirken hata:', error);
+        setNotification({
+          type: 'error',
+          message: 'Profil bilgileri yüklenemedi.'
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadProfile();
   }, [user]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -45,7 +60,7 @@ export default function Settings() {
       if (!emailRegex.test(formData.email)) {
         setNotification({
           type: 'error',
-          message: 'Please enter a valid email address.'
+          message: 'Lütfen geçerli bir e-posta adresi girin.'
         });
         return;
       }
@@ -54,36 +69,49 @@ export default function Settings() {
       if (formData.username.length < 3) {
         setNotification({
           type: 'error',
-          message: 'Username must be at least 3 characters long.'
+          message: 'Kullanıcı adı en az 3 karakter olmalıdır.'
         });
         return;
       }
 
-      const userData = localStorage.getItem('user');
-      if (userData) {
-        const updatedUser = {
-          ...JSON.parse(userData),
-          ...formData
-        };
-        localStorage.setItem('user', JSON.stringify(updatedUser));
+      // Profili güncelle
+      await updateProfile({
+        ...formData,
+        twitter: formData.twitter.replace('@', '')
+      });
         
-        setNotification({
-          type: 'success',
-          message: 'Profile settings updated successfully.'
-        });
+      setNotification({
+        type: 'success',
+        message: 'Profil başarıyla güncellendi.'
+      });
 
-        // 3 saniye sonra bildirimi kaldır
-        setTimeout(() => {
-          setNotification(null);
-        }, 3000);
-      }
-    } catch (error) {
+      // 3 saniye sonra bildirimi kaldır
+      setTimeout(() => {
+        setNotification(null);
+      }, 3000);
+    } catch (error: any) {
       setNotification({
         type: 'error',
-        message: 'An error occurred. Please try again.'
+        message: error.message || 'Bir hata oluştu. Lütfen tekrar deneyin.'
       });
     }
   };
+
+  if (loading) {
+    return (
+      <Layout>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <div className="max-w-3xl mx-auto">
+            <div className="text-center">
+              <div className="flex items-center justify-center p-4">
+                <Spinner size="md" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
@@ -114,12 +142,12 @@ export default function Settings() {
 
           <div className="bg-white shadow-sm rounded-lg">
             <div className="px-4 py-5 sm:p-6">
-              <h2 className="text-lg font-medium text-gray-900 mb-6">Profile Settings</h2>
+              <h2 className="text-lg font-medium text-gray-900 mb-6">Profil Ayarları</h2>
               
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div>
                   <label htmlFor="username" className="block text-sm font-medium text-gray-700">
-                    Username
+                    Kullanıcı Adı
                   </label>
                   <input
                     type="text"
@@ -134,7 +162,7 @@ export default function Settings() {
 
                 <div>
                   <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                    Email
+                    E-posta
                   </label>
                   <input
                     type="email"
@@ -148,7 +176,7 @@ export default function Settings() {
 
                 <div>
                   <label htmlFor="bio" className="block text-sm font-medium text-gray-700">
-                    About Me
+                    Hakkımda
                   </label>
                   <textarea
                     id="bio"
@@ -156,13 +184,13 @@ export default function Settings() {
                     value={formData.bio}
                     onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                    placeholder="Tell us about yourself..."
+                    placeholder="Kendinizden bahsedin..."
                   />
                 </div>
 
                 <div>
                   <label htmlFor="website" className="block text-sm font-medium text-gray-700">
-                    Website
+                    Web Sitesi
                   </label>
                   <input
                     type="url"
@@ -176,7 +204,7 @@ export default function Settings() {
 
                 <div>
                   <label htmlFor="twitter" className="block text-sm font-medium text-gray-700">
-                    Twitter Username
+                    Twitter Kullanıcı Adı
                   </label>
                   <div className="mt-1 flex rounded-md shadow-sm">
                     <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500 sm:text-sm">
@@ -185,17 +213,17 @@ export default function Settings() {
                     <input
                       type="text"
                       id="twitter"
-                      value={formData.twitter}
+                      value={formData.twitter.replace('@', '')}
                       onChange={(e) => setFormData({ ...formData, twitter: e.target.value })}
                       className="flex-1 block w-full rounded-none rounded-r-md border-gray-300 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                      placeholder="username"
+                      placeholder="kullaniciadi"
                     />
                   </div>
                 </div>
 
                 <div>
                   <label htmlFor="github" className="block text-sm font-medium text-gray-700">
-                    GitHub Username
+                    GitHub Kullanıcı Adı
                   </label>
                   <input
                     type="text"
@@ -203,7 +231,7 @@ export default function Settings() {
                     value={formData.github}
                     onChange={(e) => setFormData({ ...formData, github: e.target.value })}
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                    placeholder="username"
+                    placeholder="kullaniciadi"
                   />
                 </div>
 
@@ -212,7 +240,7 @@ export default function Settings() {
                     type="submit"
                     className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                   >
-                    Save Changes
+                    Değişiklikleri Kaydet
                   </button>
                 </div>
               </form>
@@ -222,4 +250,4 @@ export default function Settings() {
       </div>
     </Layout>
   );
-} 
+}

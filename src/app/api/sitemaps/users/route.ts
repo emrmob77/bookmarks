@@ -1,45 +1,28 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs';
-import path from 'path';
+import { getUsers } from '@/lib/storage';
 
-const DATA_DIR = path.join(process.cwd(), 'data');
-
-export async function GET(request: Request) {
+export async function GET() {
   try {
-    const filePath = path.join(DATA_DIR, 'users.json');
-    if (!fs.existsSync(filePath)) {
-      return new NextResponse('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>', {
-        headers: { 'Content-Type': 'application/xml' },
-      });
-    }
+    const users = await getUsers();
+    const publicUsers = users.filter(user => user.settings?.isPublic);
 
-    const data = fs.readFileSync(filePath, 'utf-8');
-    const users = JSON.parse(data);
-    
-    let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
-    xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
-    
-    users.forEach((user: any) => {
-      xml += `  <url>\n`;
-      xml += `    <loc>${new URL(request.url).origin}/users/${user.username}</loc>\n`;
-      xml += `    <changefreq>weekly</changefreq>\n`;
-      xml += `    <priority>0.7</priority>\n`;
-      xml += `  </url>\n`;
-    });
-    
-    xml += '</urlset>';
-    
-    return new NextResponse(xml, {
-      headers: {
-        'Content-Type': 'application/xml',
-      },
+    const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  ${publicUsers.map(user => `
+    <url>
+      <loc>${process.env.NEXT_PUBLIC_BASE_URL}/users/${encodeURIComponent(user.username)}</loc>
+      <lastmod>${user.updatedAt || user.createdAt}</lastmod>
+      <changefreq>weekly</changefreq>
+      <priority>0.6</priority>
+    </url>
+  `).join('')}
+</urlset>`;
+
+    return new NextResponse(sitemap, {
+      headers: { 'Content-Type': 'application/xml' },
     });
   } catch (error) {
-    console.error('Kullanıcılar site haritası oluşturulurken hata:', error);
-    return new NextResponse('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>', {
-      headers: {
-        'Content-Type': 'application/xml',
-      },
-    });
+    console.error('Users sitemap oluşturulurken hata:', error);
+    return new NextResponse('Error generating sitemap', { status: 500 });
   }
-} 
+}

@@ -21,7 +21,7 @@ export default function SeoSettings() {
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!user?.role === 'admin') {
+    if (user?.role !== 'admin') {
       router.push('/');
       return;
     }

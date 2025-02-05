@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Bookmark, NewBookmark } from '@/types';
-import { getUsers } from '@/lib/storage';
-import { getBookmarks } from '@/lib/storage';
+import { addBookmark, updateBookmark } from '@/lib/storage';
+import toast from '@/lib/toast';
 
 interface MetadataResponse {
   title?: string;
@@ -38,7 +38,7 @@ export default function BookmarkForm({ onAdd, editingBookmark, onUpdate, onCance
       setTitle(editingBookmark.title || '');
       setDescription(editingBookmark.description || '');
       setTags(editingBookmark.tags?.join(', ') || '');
-      setIsPublic(editingBookmark.isPublic || true);
+      setIsPublic(Boolean(editingBookmark.isPublic));
     }
   }, [editingBookmark]);
 
@@ -46,74 +46,79 @@ export default function BookmarkForm({ onAdd, editingBookmark, onUpdate, onCance
   useEffect(() => {
     if (url && !editingBookmark) {
       const timeoutId = setTimeout(() => {
-        fetchMetadata();
+        fetchMetadata(url);
       }, 500);
 
       return () => clearTimeout(timeoutId);
     }
   }, [url, editingBookmark]);
 
-  const fetchMetadata = async () => {
-    if (!url) return;
-
-    setIsLoading(true);
-    setError('');
-
+  const fetchMetadata = async (url: string) => {
     try {
-      // URL formatını kontrol et
-      let validUrl = url;
-      if (!url.match(/^https?:\/\//i)) {
-        validUrl = `https://${url}`;
-      }
-
-      // URL'nin geçerli olup olmadığını kontrol et
-      try {
-        new URL(validUrl);
-      } catch (e) {
-        setError('Invalid URL format');
+      setIsLoading(true);
+      console.log('Current user:', user);
+      console.log('isApproved:', user?.settings?.isApproved, typeof user?.settings?.isApproved);
+      
+      // Kullanıcı yüklenene kadar bekle
+      if (!user) {
+        setError('Lütfen giriş yapın');
+        setIsLoading(false);
         return;
       }
 
-      try {
-        const response = await fetch(`/api/metadata?url=${encodeURIComponent(validUrl)}`, {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-          },
-          signal: AbortSignal.timeout(10000) // 10 saniye timeout
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          if (data.error) {
-            setError(data.error);
-          } else {
-            setError('Failed to fetch URL data');
-          }
-          return;
-        }
-
-        if (!data.title && !data.description) {
-          setError('No metadata found');
-          return;
-        }
-
-        setTitle(data.title || '');
-        setDescription(data.description || '');
-        setImage(data.image || '');
-      } catch (error) {
-        if (error.name === 'AbortError') {
-          setError('Request timeout - please try again');
-        } else if (!navigator.onLine) {
-          setError('No internet connection');
-        } else {
-          setError('Failed to fetch URL data');
-        }
+      // Kullanıcı onaylanmamışsa yer imi ekleyemez
+      if (!user.settings?.isApproved) {
+        setError('Hesabınız henüz onaylanmamış. Lütfen yönetici onayını bekleyin.');
+        setIsLoading(false);
+        return;
       }
-    } catch (err) {
-      console.error('Error:', err);
-      setError('An error occurred');
+
+      // URL'yi normalize et
+      let normalizedUrl = url;
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        normalizedUrl = `https://${url}`;
+      }
+
+      const response = await fetch('/api/metadata', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ url: normalizedUrl }),
+      });
+
+      if (!response.ok) {
+        // HTTPS başarısız olursa HTTP dene
+        if (normalizedUrl.startsWith('https://')) {
+          normalizedUrl = normalizedUrl.replace('https://', 'http://');
+          const httpResponse = await fetch('/api/metadata', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ url: normalizedUrl }),
+          });
+          
+          if (!httpResponse.ok) {
+            throw new Error('Failed to fetch metadata');
+          }
+          
+          const data = await httpResponse.json();
+          if (data.title) setTitle(data.title);
+          if (data.description) setDescription(data.description);
+          setUrl(normalizedUrl);
+          return;
+        }
+        throw new Error('Failed to fetch metadata');
+      }
+
+      const data = await response.json();
+      if (data.title) setTitle(data.title);
+      if (data.description) setDescription(data.description);
+      setUrl(normalizedUrl);
+    } catch (error) {
+      console.error('Error fetching metadata:', error);
+      toast.error('Failed to fetch metadata. Please check the URL and try again.');
     } finally {
       setIsLoading(false);
     }
@@ -121,32 +126,16 @@ export default function BookmarkForm({ onAdd, editingBookmark, onUpdate, onCance
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
+    if (!user || isLoading) return;
 
     try {
       setIsLoading(true);
       setError(null);
 
-      // Kullanıcı ayarlarını kontrol et
-      const users = getUsers();
-      const currentUser = users.find((u: any) => u.username === user.username);
-      
-      if (!currentUser?.settings?.isApproved) {
-        setError('Your account is not approved yet. Please wait for admin approval.');
+      if (!user.settings?.isApproved) {
+        setError('Hesabınız henüz onaylanmamış. Lütfen yönetici onayını bekleyin.');
+        setIsLoading(false);
         return;
-      }
-
-      // Eğer düzenleme modu değilse (yeni ekleme ise) limit kontrolü yap
-      if (!editingBookmark) {
-        const userBookmarks = getBookmarks().filter((b: { username: string }) => b.username === user.username);
-        if (userBookmarks.length >= (currentUser?.settings?.maxBookmarks || 10)) {
-          if (currentUser?.settings?.isPremium) {
-            setError('You have reached your premium account bookmark limit. Please contact admin to increase your limit.');
-          } else {
-            setError('You have reached your free account bookmark limit. Upgrade to premium to add more bookmarks.');
-          }
-          return;
-        }
       }
 
       const bookmarkData = {
@@ -155,29 +144,33 @@ export default function BookmarkForm({ onAdd, editingBookmark, onUpdate, onCance
         description,
         image,
         tags: tags.split(',').map(tag => tag.trim()).filter(tag => tag !== ''),
-        isPublic,
-        isPinned: false,
-        isFavorite: false,
-        favoriteCount: 0,
-        comments: []
+        isPublic: Boolean(isPublic),
+        userId: user.id,
+        username: user.username
       };
 
+      console.log('Form isPublic value:', isPublic);
+      console.log('Preparing bookmark data:', bookmarkData);
+
       if (editingBookmark && onUpdate) {
-        onUpdate({ ...editingBookmark, ...bookmarkData });
-      } else if (onAdd) {
-        onAdd({
+        const updatedBookmark = await updateBookmark({
+          ...editingBookmark,
           ...bookmarkData,
-          id: Date.now().toString(),
-          userId: user.id,
-          username: user.username,
-          createdAt: new Date().toISOString()
-        } as NewBookmark);
+          isPublic: isPublic
+        });
+        console.log('Updated bookmark response:', updatedBookmark);
+        onUpdate(updatedBookmark);
+        toast.success('Bookmark updated successfully!');
+      } else if (onAdd) {
+        onAdd(bookmarkData as NewBookmark);
+        toast.success('Bookmark added successfully!');
       }
 
       resetForm();
-    } catch (error) {
-      console.error('Error adding bookmark:', error);
-      setError('An error occurred while adding the bookmark');
+    } catch (error: any) {
+      console.error('Error saving bookmark:', error);
+      setError(error.message || 'An error occurred while saving the bookmark');
+      toast.error(error.message || 'Failed to save bookmark');
     } finally {
       setIsLoading(false);
     }
@@ -203,16 +196,15 @@ export default function BookmarkForm({ onAdd, editingBookmark, onUpdate, onCance
             type="text"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            placeholder="e.g., https://example.com"
-            className="flex-1 block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-blue-500 focus:ring-blue-500"
+            placeholder="e.g., example.com"
+            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
             required
-            pattern="^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$"
-            title="Please enter a valid URL (e.g., https://example.com)"
+            title="Please enter a valid URL (e.g., example.com)"
           />
           {!editingBookmark && (
             <button
               type="button"
-              onClick={fetchMetadata}
+              onClick={() => fetchMetadata(url)}
               className={`ml-2 inline-flex items-center p-1.5 border border-gray-300 rounded-md text-gray-700 bg-white hover:bg-gray-50 ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
               disabled={isLoading}
               title="Auto-fetch URL metadata"
